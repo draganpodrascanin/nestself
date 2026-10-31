@@ -11,6 +11,8 @@
  *   apps/workspace/src/auth/step-up-dialog.tsx            apps/admin/src/auth/step-up-dialog.tsx
  *   apps/workspace/src/auth/screens/sso-bind-screen.tsx   apps/admin/src/auth/screens/sso-bind-screen.tsx
  *   apps/workspace/src/features/access/use-debounced.ts   apps/admin/src/use-debounced.ts
+ *   apps/workspace/src/auth/with-step-up.ts              apps/admin/src/auth/with-step-up.ts
+ *   apps/workspace/src/query-retry.ts                     apps/admin/src/query-retry.ts
  *
  * Run by `pnpm check` as the turbo task `@nestself/workspace#check`, whose
  * inputs include `apps/admin/src` (turbo.json), so a change to an admin copy
@@ -29,6 +31,8 @@ const PAIRS = [
   ['apps/workspace/src/auth/step-up-dialog.tsx', 'apps/admin/src/auth/step-up-dialog.tsx'],
   ['apps/workspace/src/auth/screens/sso-bind-screen.tsx', 'apps/admin/src/auth/screens/sso-bind-screen.tsx'],
   ['apps/workspace/src/features/access/use-debounced.ts', 'apps/admin/src/use-debounced.ts'],
+  ['apps/workspace/src/auth/with-step-up.ts', 'apps/admin/src/auth/with-step-up.ts'],
+  ['apps/workspace/src/query-retry.ts', 'apps/admin/src/query-retry.ts'],
 ];
 
 /** The file's bytes, or null when it does not exist. */

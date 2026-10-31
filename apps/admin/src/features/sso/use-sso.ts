@@ -24,9 +24,11 @@ export const ssoKeys = {
 };
 
 /**
- * The connection list. Once the user cancelled the step-up of this read, only
- * the screen's Try again asks again: neither a retry (`shouldRetryQuery`) nor
- * a refetch on window focus reopens the dialog.
+ * The connection list. A step-up read is asked for only when the user acts
+ * (opening the screen, Try again, a mutation's invalidation): neither a retry
+ * (`shouldRetryQuery`) nor a refetch on window focus or reconnect runs it, as
+ * the workspace's step-up reads do, because a refetch after the step-up has
+ * aged would open the dialog unprompted.
  */
 export function useSsoConnections(opsApi: OpsAdminApi, enabled: boolean) {
   const { stepUp } = useAuth();
@@ -34,7 +36,8 @@ export function useSsoConnections(opsApi: OpsAdminApi, enabled: boolean) {
     queryKey: ssoKeys.list,
     queryFn: () => withStepUp(stepUp, async () => (await opsApi.listSsoConnections()).items),
     enabled,
-    refetchOnWindowFocus: (query) => !(query.state.error instanceof StepUpCancelledError),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 

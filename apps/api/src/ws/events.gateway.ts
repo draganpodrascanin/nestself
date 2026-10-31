@@ -4,12 +4,13 @@
  * Served rooms and the rule behind each are listed in `ws-messages.ts`; a
  * subscription is authorised from the room name alone (T-CW-1.6).
  *
- * The gateway is marked `@Public()` to bypass the global HTTP guards
- * (AuthenticationGuard, CsrfGuard, AuthorizationGuard, ThrottlerGuard)
- * which are not designed for WebSocket execution contexts.
- * Authentication is enforced in the `NestSelfIoAdapter` handshake middleware
- * (AUTHZ-R-58), and per-subscription authorization is enforced via
- * `SubscriptionAuthorizer` in each handler (AUTHZ-R-59).
+ * The gateway is marked `@Public()` to bypass the global authentication,
+ * CSRF and authorization guards, which are not designed for WebSocket
+ * execution contexts. The global `AppThrottlerGuard` still runs on every
+ * message and tracks a socket by its id (60 messages a minute per handler
+ * and connection). Authentication is enforced in the `NestSelfIoAdapter`
+ * handshake middleware (AUTHZ-R-58), and per-subscription authorization is
+ * enforced via `SubscriptionAuthorizer` in each handler (AUTHZ-R-59).
  *
  * The default-deny test (AUTHZ-R-62) accepts `@Public()`.
  *
