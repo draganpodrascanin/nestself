@@ -25,9 +25,6 @@ export const ASSIGNMENTS_TTL = 60;
 /** Org tree cache: 5 min. */
 export const ORG_TREE_TTL = 300;
 
-/** OTP record: 10 min. */
-export const OTP_TTL = 600;
-
 /**
  * Time between two NestSelf-sent codes on one challenge: a resend is refused
  * for this long after the last code went out (`otpResendKey`).
@@ -114,7 +111,10 @@ export function orgTreeKey(orgId: string): string {
   return `org_tree:${orgId}`;
 }
 
-/** `otp:{purpose}:{hash}` */
+/**
+ * `otp:{purpose}:{hash}`: a code challenge issued by NestSelf (`NestselfOtpService`).
+ * `hash` is the sha256 of the challenge token; the record lives for `CHALLENGE_TTL`.
+ */
 export function otpKey(purpose: string, hash: string): string {
   return `otp:${purpose}:${hash}`;
 }

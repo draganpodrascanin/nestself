@@ -3,8 +3,10 @@
  * two flows where Cognito cannot send one: the step-up of a federated user and
  * the confirmation of the mailbox in a pending SSO binding.
  *
- * - `issue` draws a code of `EMAIL_OTP_MAX_LENGTH` digits, mails it through the
- *   `Mailer` and answers with the challenge token and the masked address.
+ * - `issue` draws a code of `EMAIL_OTP_MAX_LENGTH` digits and mails it through
+ *   the `Mailer`. Only when the mail was accepted does it store the challenge,
+ *   so a refused mail leaves nothing behind. It answers with the challenge
+ *   token and the masked address.
  * - `verify` checks a code. Three tries (`MAX_EMAIL_OTP_ATTEMPTS`), then the
  *   challenge is gone; success consumes it and returns what `issue` was given.
  * - `resend` mails a new code for the same challenge: same token, same
@@ -22,12 +24,15 @@
  * one request at a time works on a challenge. Parallel guesses cannot spend
  * more than the attempt budget, and a resend cannot bring back a challenge
  * that a verify has just consumed. A request that finds the record taken
- * answers `invalid_challenge`.
+ * answers `invalid_challenge`. A resend keeps the record out of the store for
+ * as long as its mail is in flight: the renewed record goes in once the mail
+ * was accepted, the previous one goes back if it was not. Nothing can change
+ * the key in between, so the restore never overwrites a newer state.
  *
  * Failures: 401 `invalid_challenge` (unknown, expired or other purpose),
  * 401 `invalid_code`, 429 `too_many_attempts`, 429 `rate_limited` with
  * `details.retryAfter`, 503 `unavailable` when the provider refuses the mail
- * (`MailDeliveryError`). A resend whose mail fails changes nothing.
+ * (`MailDeliveryError`). A resend whose mail fails puts the challenge back as it was.
  *
  * In stub mode (`AUTH_MODE` is not `cognito`) `FAKE_IDP_FIXED_OTP` fixes the
  * code, as it does for the fake identity provider, so Playwright types the
@@ -112,7 +117,7 @@ export class NestselfOtpService {
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
-  /** Starts a challenge: stores it, mails the code and starts the resend cooldown. */
+  /** Starts a challenge: mails the code, then stores the challenge and starts the resend cooldown. */
   async issue(input: OtpIssueInput): Promise<{ challengeToken: string; emailMasked: string }> {
     const challengeToken = randomBytes(32).toString('base64url');
     const hash = sha256(challengeToken);
@@ -127,11 +132,13 @@ export class NestselfOtpService {
       template: input.template,
     };
 
+    // Mail first. The token leaves this method only after the mail was accepted, so a
+    // refused mail must leave neither a record (it holds the address) nor a cooldown.
+    await this.deliver(record, code);
     await this.save(input.purpose, hash, record);
     await this.store.set(otpResendKey(input.purpose, hash), '1', {
       ttlSeconds: OTP_RESEND_COOLDOWN_SECONDS,
     });
-    await this.deliver(record, code);
 
     return { challengeToken, emailMasked: maskEmail(input.email) };
   }
@@ -204,14 +211,19 @@ export class NestselfOtpService {
     const code = this.generateCode();
     const renewed: OtpRecord = { ...record, codeHash: codeHash(challengeToken, code), locale };
     try {
-      await this.save(purpose, hash, renewed);
+      // The record is out of the store while the mail is in flight. A request that arrives
+      // meanwhile finds the challenge taken and cannot change what is put back below.
       await this.deliver(renewed, code);
     } catch (error) {
-      // No mail went out: the code sent before keeps working and the user may ask again at once.
+      // The provider refused the mail, or did not answer, and then we cannot tell whether it
+      // went out. Put the record back as it was, so the code sent before keeps working, and
+      // release the cooldown so the user can ask again at once. A mail that did go out after
+      // all carries a code that opens nothing.
       await this.save(purpose, hash, record);
       await this.store.del(cooldownKey);
       throw error;
     }
+    await this.save(purpose, hash, renewed);
     return { emailMasked: maskEmail(record.email) };
   }
 

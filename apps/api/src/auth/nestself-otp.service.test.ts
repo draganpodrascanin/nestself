@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiHttpException } from '../common/api-error.js';
 import { EmailModule } from '../email/email.module.js';
 import { LoggingMailer } from '../email/logging-mailer.js';
-import { MailDeliveryError, Mailer } from '../email/mailer.js';
+import { MailDeliveryError, Mailer, type MailMessage } from '../email/mailer.js';
 import { KEY_VALUE_STORE } from '../redis/key-value-store.js';
 import { MemoryKeyValueStore } from '../redis/memory-key-value-store.js';
 import {
@@ -88,6 +88,34 @@ async function expectRefused(
 const secondsLater = (seconds: number): void => {
   vi.advanceTimersByTime(seconds * 1000);
 };
+
+interface HeldSend {
+  /** Resolves with the message once the service has handed it to the mailer. */
+  handedOver: Promise<MailMessage>;
+  /** The provider accepts the mail. */
+  accept(): void;
+  /** The provider refuses the mail. */
+  refuse(error: Error): void;
+}
+
+/** Makes the next `send` wait for the test, so the test can act while a mail is in flight. */
+function holdNextSend(ctx: Ctx): HeldSend {
+  let handOver!: (message: MailMessage) => void;
+  const handedOver = new Promise<MailMessage>((resolve) => {
+    handOver = resolve;
+  });
+  let accept!: () => void;
+  let refuse!: (error: Error) => void;
+  const outcome = new Promise<void>((resolve, reject) => {
+    accept = resolve;
+    refuse = reject;
+  });
+  vi.spyOn(ctx.mailer, 'send').mockImplementationOnce(async (message) => {
+    handOver(message);
+    await outcome;
+  });
+  return { handedOver, accept, refuse };
+}
 
 describe('NestselfOtpService', () => {
   let ctx: Ctx;
@@ -248,6 +276,22 @@ describe('NestselfOtpService', () => {
       });
     });
 
+    it('stores nothing until the mail is accepted, then the record and the cooldown', async () => {
+      const held = holdNextSend(ctx);
+
+      const issuing = ctx.service.issue(INPUT);
+      const message = await held.handedOver;
+
+      // The token is not out yet, and no record or cooldown exists for a code that may not arrive.
+      expect(await ctx.store.scan('*')).toEqual([]);
+      held.accept();
+      const { challengeToken } = await issuing;
+      expect(await ctx.store.scan('*')).toHaveLength(2);
+      await expect(
+        ctx.service.verify('step_up', challengeToken, message.params.code!),
+      ).resolves.toMatchObject({ email: EMAIL });
+    });
+
     describe('when the mail cannot be delivered', () => {
       it('answers 503 unavailable and logs the sanitised error, never the address', async () => {
         const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
@@ -262,6 +306,8 @@ describe('NestselfOtpService', () => {
         expect(line).toContain('step_up_code');
         expect(line).toContain('MessageRejected');
         expect(line).not.toContain('dragan');
+        // The token never left the service, so nothing may stay behind: no record holding the address.
+        expect(await ctx.store.scan('*')).toEqual([]);
       });
 
       it('lets any other failure through: a bad template param is a bug, not an outage', async () => {
@@ -269,6 +315,8 @@ describe('NestselfOtpService', () => {
         vi.spyOn(ctx.mailer, 'send').mockRejectedValue(bug);
 
         await expect(ctx.service.issue(INPUT)).rejects.toBe(bug);
+
+        expect(await ctx.store.scan('*')).toEqual([]);
       });
     });
   });
@@ -708,6 +756,106 @@ describe('NestselfOtpService', () => {
 
         expect(await ctx.store.get(otpResendKey('step_up', sha256(challengeToken)))).toBeNull();
         await expect(ctx.service.verify('step_up', challengeToken, code)).resolves.toMatchObject({
+          email: EMAIL,
+        });
+      });
+    });
+
+    describe('while its mail is in flight', () => {
+      beforeEach(() => {
+        vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      });
+
+      /** A challenge with one wrong guess on it, whose resend is stopped at the mailer. */
+      async function resendStoppedAtTheMailer() {
+        const { challengeToken } = await ctx.service.issue(INPUT);
+        const first = mailedCode(ctx);
+        await expectRefused(
+          ctx.service.verify('step_up', challengeToken, wrongCode(first)),
+          401,
+          'invalid_code',
+        );
+        secondsLater(OTP_RESEND_COOLDOWN_SECONDS);
+        const held = holdNextSend(ctx);
+        const resending = ctx.service.resend('step_up', challengeToken, 'en');
+        const second = (await held.handedOver).params.code!;
+        return { challengeToken, first, second, held, resending };
+      }
+
+      it('counts no guess and locks nothing: the challenge is taken, and a refused mail puts it back as it was', async () => {
+        const { challengeToken, first, held, resending } = await resendStoppedAtTheMailer();
+        const refusedResend = refusal(resending);
+
+        // Three guesses while the mail is out would lock a challenge that evaluated them.
+        for (let guess = 0; guess < 3; guess++) {
+          await expectRefused(
+            ctx.service.verify('step_up', challengeToken, wrongCode(first)),
+            401,
+            'invalid_challenge',
+          );
+        }
+        held.refuse(new MailDeliveryError({ name: 'Throttling', httpStatus: 400 }));
+        expect(await refusedResend).toMatchObject({ code: 'unavailable' });
+
+        // As it was: the one guess made before the resend still counts, the three in flight did not.
+        const stored = await ctx.store.get(otpKey('step_up', sha256(challengeToken)));
+        expect(JSON.parse(stored!)).toMatchObject({
+          attempts: 1,
+          codeHash: sha256(`${challengeToken}:${first}`),
+        });
+        await expectRefused(
+          ctx.service.verify('step_up', challengeToken, wrongCode(first)),
+          401,
+          'invalid_code',
+        );
+        await expectRefused(
+          ctx.service.verify('step_up', challengeToken, wrongCode(first)),
+          429,
+          'too_many_attempts',
+        );
+      });
+
+      it('does not accept the new code before its mail is out, so a refused mail cannot leave a challenge consumed twice', async () => {
+        const { challengeToken, first, second, held, resending } = await resendStoppedAtTheMailer();
+        const refusedResend = refusal(resending);
+
+        // The new code is in the mailer's hands but not in the store: it opens nothing yet.
+        await expectRefused(
+          ctx.service.verify('step_up', challengeToken, second),
+          401,
+          'invalid_challenge',
+        );
+        held.refuse(new MailDeliveryError({ name: 'Throttling', httpStatus: 400 }));
+        expect(await refusedResend).toMatchObject({ code: 'unavailable' });
+
+        // The first code opens the challenge once, and only once.
+        await expect(ctx.service.verify('step_up', challengeToken, first)).resolves.toMatchObject({
+          email: EMAIL,
+        });
+        await expectRefused(
+          ctx.service.verify('step_up', challengeToken, first),
+          401,
+          'invalid_challenge',
+        );
+      });
+
+      it('keeps the old code shut as well, and opens the new one when the mail is accepted', async () => {
+        const { challengeToken, first, second, held, resending } = await resendStoppedAtTheMailer();
+
+        await expectRefused(
+          ctx.service.verify('step_up', challengeToken, first),
+          401,
+          'invalid_challenge',
+        );
+        held.accept();
+        await expect(resending).resolves.toEqual({ emailMasked: 'd***@intesa.example' });
+
+        await expectRefused(
+          ctx.service.verify('step_up', challengeToken, first),
+          401,
+          'invalid_code',
+        );
+        await expect(ctx.service.verify('step_up', challengeToken, second)).resolves.toMatchObject({
           email: EMAIL,
         });
       });
