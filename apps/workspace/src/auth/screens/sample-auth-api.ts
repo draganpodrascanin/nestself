@@ -17,6 +17,13 @@ const FAKE_TOKEN = 'sample-challenge-token';
 
 type Resolved<K extends keyof AuthApi> = Awaited<ReturnType<AuthApi[K]>>;
 
+const SAMPLE_STEP_UP: Resolved<'stepUpStart'> = {
+  method: 'email_otp',
+  challengeToken: FAKE_TOKEN,
+  ssoStartUrl: null,
+  emailMasked: null,
+};
+
 export function createSampleAuthApi(): AuthApi {
   return {
     discover: async (email: string) => {
@@ -77,8 +84,9 @@ export function createSampleAuthApi(): AuthApi {
     updateLocale: async () => ({}) as unknown as Resolved<'updateLocale'>,
     updateDisplayName: async () => ({}) as unknown as Resolved<'updateDisplayName'>,
 
-    stepUpStart: async () =>
-      ({ challengeToken: FAKE_TOKEN }) as unknown as Resolved<'stepUpStart'>,
+    // No address is shown in sample mode: emailMasked null keeps the general description.
+    stepUpStart: async () => SAMPLE_STEP_UP,
+    stepUpResend: async () => SAMPLE_STEP_UP,
     stepUpVerify: async () => undefined as unknown as Resolved<'stepUpVerify'>,
 
     invitationPreview: async () => ({}) as unknown as Resolved<'invitationPreview'>,

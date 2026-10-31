@@ -174,6 +174,18 @@ export function createAuthApi(client: ApiClient) {
         schema: StepUpStartResponseSchema,
       }),
 
+    /**
+     * POST /auth/step-up/resend — a new code for the challenge of an earlier
+     * start, at most one a minute (429 `rate_limited` with
+     * `details.retryAfter`). Continue with the answer's `challengeToken`: it
+     * may be a new one.
+     */
+    stepUpResend: (challengeToken: string) =>
+      client.request('/api/auth/step-up/resend', {
+        ...jsonPost({ challengeToken }),
+        schema: StepUpStartResponseSchema,
+      }),
+
     /** POST /auth/step-up/verify — complete a step-up challenge (204). */
     stepUpVerify: (challengeToken: string, response: string) =>
       client.request('/api/auth/step-up/verify', {
@@ -189,10 +201,13 @@ export function createAuthApi(client: ApiClient) {
         schema: InvitationPreviewResponseSchema,
       }),
 
-    /** POST /invitations/accept — accept an invitation. */
-    invitationAccept: (token: string) =>
+    /**
+     * POST /invitations/accept — accept an invitation. `locale` is the
+     * language of the code email the acceptance may send.
+     */
+    invitationAccept: (token: string, locale?: Locale) =>
       client.request('/api/invitations/accept', {
-        ...jsonPost({ token }),
+        ...jsonPost({ token, locale }),
         schema: InvitationAcceptResponseSchema,
       }),
 

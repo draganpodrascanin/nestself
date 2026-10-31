@@ -133,5 +133,38 @@ describe('createAuthApi() account methods', () => {
     const { auth } = setup({ enrolled: false });
     await expect(auth.totpConfirm('123456')).rejects.toMatchObject({ code: 'invalid_response' });
   });
+
+  const RESENT = { method: 'email_otp', challengeToken: 'tok-2', ssoStartUrl: null, emailMasked: 'i***@acme.example' };
+
+  it('stepUpResend posts the challenge token to /api/auth/step-up/resend and parses the new challenge', async () => {
+    const { auth, last } = setup(RESENT);
+    await expect(auth.stepUpResend('tok-1')).resolves.toEqual(RESENT);
+    expect(last()).toEqual({
+      url: 'http://x/api/auth/step-up/resend',
+      method: 'POST',
+      csrf: 'tok',
+      body: { challengeToken: 'tok-1' },
+    });
+  });
+
+  it('stepUpResend rejects an answer without emailMasked', async () => {
+    const { emailMasked: _omit, ...withoutMask } = RESENT;
+    const { auth } = setup(withoutMask);
+    await expect(auth.stepUpResend('tok-1')).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  const ACCEPTED = { method: 'email_otp', challengeToken: 'tok', ssoStartUrl: null, step: null };
+
+  it('invitationAccept sends the locale of the code email with the token', async () => {
+    const { auth, last } = setup(ACCEPTED);
+    await auth.invitationAccept('inv-1', 'hu');
+    expect(last()).toMatchObject({ url: 'http://x/api/invitations/accept', method: 'POST', body: { token: 'inv-1', locale: 'hu' } });
+  });
+
+  it('invitationAccept sends only the token when no locale is given', async () => {
+    const { auth, last } = setup(ACCEPTED);
+    await auth.invitationAccept('inv-1');
+    expect(last().body).toEqual({ token: 'inv-1' });
+  });
 });
 

@@ -44,7 +44,7 @@ function renderStepUp(
 ) {
   const requestFn = vi.fn((path: unknown) => {
     if (path === '/api/auth/step-up/start') {
-      return Promise.resolve({ method: 'email_otp', challengeToken: 'challenge-1', ssoStartUrl: null });
+      return Promise.resolve({ method: 'email_otp', challengeToken: 'challenge-1', ssoStartUrl: null, emailMasked: null });
     }
     if (path === '/api/auth/step-up/verify') return verify();
     return Promise.resolve(sampleMe);
@@ -119,12 +119,13 @@ describe('AuthProvider stepUp()', () => {
     const codeLabel = new RegExp(testI18n.t('auth:stepUp.codeLabel'));
     const submit = { name: testI18n.t('auth:stepUp.submit') };
 
-    // First step-up: submit, then cancel while verify is still in flight.
+    // First step-up: submit, then close the dialog while verify is still in
+    // flight (Cancel is disabled meanwhile; the dialog's close button is not).
     await user.click(screen.getByRole('button', { name: 'do sensitive thing' }));
     await user.type(await screen.findByLabelText(codeLabel), '1'.repeat(EMAIL_OTP_MAX_LENGTH));
     await user.click(screen.getByRole('button', submit));
     await waitFor(() => expect(verify).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByRole('button', { name: testI18n.t('auth:stepUp.cancel') }));
+    await user.click(screen.getByRole('button', { name: testI18n.t('common:nav.close') }));
     await waitFor(() => expect(onResult).toHaveBeenCalledWith(false));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
