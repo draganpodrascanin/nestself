@@ -277,6 +277,7 @@ export const PrincipalSchema = z.object({
     .nullable(),
   context: ActiveContextSchema,
   auth: AuthInfoSchema,
+  /** The hash of the web session's id, as the sessions list names a session (`sessionIdHash`); never the cookie value. Null for a bearer principal. */
   sessionId: z.string().nullable(),
   tokenFamily: z.string().nullable(),
 });

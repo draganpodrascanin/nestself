@@ -792,8 +792,10 @@ describe('InvitationsService', () => {
 
       expect(result).toHaveProperty('id', 'inv_1');
       expect(result.revokedAt).not.toBeNull();
+      // Audited inside the revoking transaction, like the creation.
       expect(audit.record).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'invitation.revoked' }),
+        expect.objectContaining({ action: 'invitation.revoked', recordId: 'inv_1' }),
+        expect.objectContaining({ tx: expect.anything() }),
       );
     });
 
@@ -818,8 +820,9 @@ describe('InvitationsService', () => {
       const result = await service.revoke('org_sample', 'inv_1', 'user_ivana');
 
       expect(result).toHaveProperty('id', 'inv_1');
-      // revoke() should not be called again since it's already revoked.
+      // revoke() should not be called again since it's already revoked, and nothing new is audited.
       expect(invitations.revoke).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
     });
 
     it('returns 404 when invitation is not in this org', async () => {

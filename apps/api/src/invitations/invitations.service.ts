@@ -335,12 +335,28 @@ export class InvitationsService {
         });
       }
 
-      // Idempotent: already revoked → return as-is.
+      // Idempotent: already revoked → return as-is, and nothing new to audit.
       if (invitation.revokedAt) {
         return invitation;
       }
 
-      return this.invitations.revoke(invitation.id, new Date(), tx);
+      const revoked = await this.invitations.revoke(invitation.id, new Date(), tx);
+      if (!revoked) return revoked;
+      // Audited in the revoking transaction: a revoke never commits without its row.
+      await this.audit.record(
+        {
+          action: 'invitation.revoked',
+          actorUserId,
+          actorKind: 'USER',
+          orgId,
+          recordType: 'invitation',
+          recordId: revoked.id,
+          result: 'ALLOWED',
+          details: { emailNormalised: revoked.email },
+        },
+        { tx },
+      );
+      return revoked;
     });
 
     if (!row) {
@@ -350,17 +366,6 @@ export class InvitationsService {
         message: 'Invitation not found',
       });
     }
-
-    await this.audit.record({
-      action: 'invitation.revoked',
-      actorUserId,
-      actorKind: 'USER',
-      orgId,
-      recordType: 'invitation',
-      recordId: row.id,
-      result: 'ALLOWED',
-      details: { emailNormalised: row.email },
-    });
 
     return this.toResponse(row);
   }

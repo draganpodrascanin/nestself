@@ -8,6 +8,12 @@
  * The workspace is the target whatever the surface: the callback's surface is
  * known only from its PKCE record, which a refused request never reads.
  *
+ * The guard also runs on Socket.IO gateway messages (`@Public()` skips the
+ * authentication guards, not this one). There `getRequest()` is the socket,
+ * which has no `ip`, so the base tracker would put every client's `subscribe`
+ * and `unsubscribe` messages into one bucket per handler; a socket is tracked
+ * by its own id instead, so each connection has its own budget.
+ *
  * @see 5.9 Throttling and proxies
  */
 import { type ExecutionContext, Inject, Injectable } from '@nestjs/common';
@@ -37,6 +43,14 @@ export class AppThrottlerGuard extends ThrottlerGuard {
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {
     super(options, storageService, reflector);
+  }
+
+  /** A Socket.IO socket (the "request" of a gateway message) is tracked by its id; HTTP keeps the client IP. */
+  protected override async getTracker(req: Record<string, unknown>): Promise<string> {
+    if (typeof req.id === 'string' && typeof req.handshake === 'object' && req.handshake !== null) {
+      return `ws:${req.id}`;
+    }
+    return super.getTracker(req);
   }
 
   protected override async throwThrottlingException(

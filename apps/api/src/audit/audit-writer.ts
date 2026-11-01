@@ -20,6 +20,7 @@ import type { DbExecutor } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuditRepository, type NewAuditEvent } from '../db/repositories/audit.repository.js';
 import { categoryFor, type AuditAction, type AuditCategory } from './audit-events.js';
+import { hashSessionId } from '../session/session-helpers.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,6 +35,7 @@ export interface AuditEventInput {
   recordId: string;
   result: 'ALLOWED' | 'DENIED' | 'NONE';
   details?: Record<string, unknown>;
+  /** The raw session id of the actor's web session; stored as its hash (`hashSessionId`), never as the cookie value. */
   sessionId?: string | null;
   ip?: string | null;
   userAgent?: string | null;
@@ -193,7 +195,7 @@ export class AuditWriter {
       result: input.result,
       category,
       details,
-      sessionId: input.sessionId ?? null,
+      sessionId: input.sessionId ? hashSessionId(input.sessionId) : null,
       ipHash,
       userAgentFamily,
       retainUntil,

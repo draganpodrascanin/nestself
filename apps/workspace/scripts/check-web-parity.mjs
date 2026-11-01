@@ -11,6 +11,8 @@
  *   apps/workspace/src/auth/step-up-dialog.tsx            apps/admin/src/auth/step-up-dialog.tsx
  *   apps/workspace/src/auth/screens/sso-bind-screen.tsx   apps/admin/src/auth/screens/sso-bind-screen.tsx
  *   apps/workspace/src/features/access/use-debounced.ts   apps/admin/src/use-debounced.ts
+ *   apps/workspace/src/auth/with-step-up.ts              apps/admin/src/auth/with-step-up.ts
+ *   apps/workspace/src/query-retry.ts                     apps/admin/src/query-retry.ts
  *   apps/workspace/src/features/listening/listening-errors.ts  apps/admin/src/features/listening/listening-errors.ts
  *   apps/workspace/src/features/listening/score-tone.ts   apps/admin/src/features/reviews/score-tone.ts
  *   apps/workspace/src/features/reviews/review-labels.ts  apps/admin/src/features/reviews/review-labels.ts
@@ -32,6 +34,8 @@ const PAIRS = [
   ['apps/workspace/src/auth/step-up-dialog.tsx', 'apps/admin/src/auth/step-up-dialog.tsx'],
   ['apps/workspace/src/auth/screens/sso-bind-screen.tsx', 'apps/admin/src/auth/screens/sso-bind-screen.tsx'],
   ['apps/workspace/src/features/access/use-debounced.ts', 'apps/admin/src/use-debounced.ts'],
+  ['apps/workspace/src/auth/with-step-up.ts', 'apps/admin/src/auth/with-step-up.ts'],
+  ['apps/workspace/src/query-retry.ts', 'apps/admin/src/query-retry.ts'],
   ['apps/workspace/src/features/listening/listening-errors.ts', 'apps/admin/src/features/listening/listening-errors.ts'],
   ['apps/workspace/src/features/listening/score-tone.ts', 'apps/admin/src/features/reviews/score-tone.ts'],
   ['apps/workspace/src/features/reviews/review-labels.ts', 'apps/admin/src/features/reviews/review-labels.ts'],

@@ -33,6 +33,23 @@ function contextFor(controller: new () => object, handler: string): ExecutionCon
   } as unknown as ExecutionContext;
 }
 
+class Gateway {
+  @Throttle(ONE_A_MINUTE)
+  subscribe() {}
+}
+
+/** A gateway message: the "request" is the Socket.IO socket, which has an id and a handshake but no `ip`. */
+function wsContextFor(socketId: string): ExecutionContext {
+  const socket = { id: socketId, handshake: { address: '::ffff:127.0.0.1', headers: {} } };
+  return {
+    getClass: () => Gateway,
+    getHandler: () => Gateway.prototype.subscribe,
+    getType: () => 'ws',
+    switchToHttp: () => ({ getRequest: () => socket, getResponse: () => ({}) }),
+    switchToWs: () => ({ getClient: () => socket }),
+  } as unknown as ExecutionContext;
+}
+
 describe('AppThrottlerGuard', () => {
   const storages: ThrottlerStorageService[] = [];
 
@@ -77,6 +94,18 @@ describe('AppThrottlerGuard', () => {
   it('honours the marker on the controller class', async () => {
     const guard = await guardWith({});
     expect(await refusal(guard, contextFor(BrowserController, 'anyRoute'))).toBeInstanceOf(ThrottledRedirect);
+  });
+
+  it('gives every WebSocket connection its own bucket instead of one per handler', async () => {
+    const guard = await guardWith({});
+    const first = wsContextFor('socket-1');
+    const second = wsContextFor('socket-2');
+
+    await expect(guard.canActivate(first)).resolves.toBe(true);
+    // The second message of the same socket is refused (limit 1 a minute)...
+    await expect(guard.canActivate(first)).rejects.toBeInstanceOf(ThrottlerException);
+    // ...while another socket on the same handler still has its budget.
+    await expect(guard.canActivate(second)).resolves.toBe(true);
   });
 
   it('keeps the ThrottlerException (JSON 429) on every other route', async () => {
