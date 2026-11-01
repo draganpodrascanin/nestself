@@ -20,4 +20,5 @@ export * from './appointments.js';
 export * from './calls.js';
 export * from './appointment-approvals.js';
 export * from './webinars.js';
+export * from './listening.js';
 export * from './relations.js';

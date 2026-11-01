@@ -268,6 +268,23 @@ export const contentEventKind = pgEnum('content_event_kind', [
   'search_performed', 'search_no_result',
 ]);
 
+// ─── Employee listening (ADR 0002) ───────────────────────────────────────
+
+/** Questionnaire version lifecycle (spec SUR-01, section 8). */
+export const questionnaireStatus = pgEnum('questionnaire_status', [
+  'draft', 'in_review', 'published', 'archived',
+]);
+
+/** Survey cycle lifecycle (spec SUR-02..04, section 8). */
+export const surveyCycleStatus = pgEnum('survey_cycle_status', [
+  'scheduled', 'open', 'closing', 'published', 'canceled', 'failed',
+]);
+
+/** Private participation state (spec section 8); never an employer status list. */
+export const surveyParticipationState = pgEnum('survey_participation_state', [
+  'invited', 'draft', 'submitted', 'ineligible',
+]);
+
 // ─── Retained enums ──────────────────────────────────────────────────────
 
 export const supportArea = pgEnum('support_area', ['PSYCHOLOGICAL', 'LEGAL', 'FINANCIAL']);

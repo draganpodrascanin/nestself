@@ -43,8 +43,8 @@ describe.skipIf(!shouldRun)('CMS foundation schema integration tests (T-C1.04)',
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    // 0000 through 0020 = 21 migrations (SSO domains at 0006, calls at 0007-0015, CMS at 0016, auth phase 4 at 0017-0020)
-    expect(Number(rows[0]!.n)).toBe(21);
+    // 0000 through 0021 = 22 migrations (SSO domains at 0006, calls at 0007-0015, CMS at 0016, auth phase 4 at 0017-0020, listening at 0021)
+    expect(Number(rows[0]!.n)).toBe(22);
   });
 
   it('nestself_unaccent returns unaccented text', async () => {

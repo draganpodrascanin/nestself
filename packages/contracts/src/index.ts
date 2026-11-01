@@ -270,8 +270,10 @@ export * from './calls.ts';
 export * from './webinars.ts';
 
 // ---------------------------------------------------------------------------
-// Employee listening: the shared scoring and disclosure library (ADR 0002)
+// Employee listening: contracts and the shared scoring library (ADR 0002)
 // ---------------------------------------------------------------------------
+
+export * from './listening.ts';
 
 export {
   LISTENING_DIMENSION_KEYS,
