@@ -100,6 +100,10 @@ Every failure the user caused must put a readable message on screen. A `console.
 4. **Unknown codes still render something.** Fall back to `error.unknown` rather than letting the branch fall through.
 5. **Prove it.** A screen that can fail needs a test that asserts the message appears, not only that the call was made.
 
+## Employee listening
+
+Scores are integers in tenths of a percent computed once by `packages/contracts/src/listening-scoring.ts` (`scoreTenths`, `classifyScore`, `trendTenths`, `isStale`, `planSuppression`); the API persists the result per cell and the web apps only format what the API classified. No route, view or export ever enumerates participation (who answered, who did not) or returns a cell below the minimum cohort, a raw count (`validCount`, `favorableCount`) or an answer. A feedback case row never joins `feedback_case_reporters` on a handler, employer or staff path: the reporter's account is read on the reporter's own `/me/feedback/*` routes only, and reporter-driven audit rows carry `actorUserId: null`. A workplace review never changes a score, never charges money and never shares more than an active sharing grant allows. `docs/adr/0002-employee-listening-module.md` holds the decisions; `docs/tasks/employee-listening/dev.md` the map.
+
 ## Serbian Cyrillic catalogs
 
 Cyrillic catalogs are generated from the Latin source by transliteration (`pnpm --filter @nestself/i18n build:cyrillic`) and checked by `pnpm check`. Do not edit `sr-Cyrl` JSON files by hand. The Latin catalogs are drafts pending a native speaker review.

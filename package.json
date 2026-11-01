@@ -18,6 +18,7 @@
     "docs:auth:screenshots": "playwright test -c playwright.auth.config.ts --project screenshots",
     "docs:cms:pdf": "python3 docs/cms-ee/manual/make-manual-html.py && node docs/tasks/calls-webinars/pdf/build-pdf.mjs docs/cms-ee/manual/user-manual.html docs/cms-ee/user-manual.pdf",
     "docs:auth:pdf": "node docs/auth/pdf/build.mjs docs/auth/implementation.md docs/auth/implementation.pdf && node docs/auth/pdf/build.mjs docs/auth/quick-guide.md docs/auth/quick-guide.pdf && for guide in employee hr-admin employer-owner expert platform-staff; do node docs/auth/pdf/build.mjs docs/auth/guides/$guide.md docs/auth/guides/$guide.pdf || exit 1; done",
+    "docs:listening:pdf": "node docs/auth/pdf/build.mjs docs/tasks/employee-listening/user-guide.md docs/tasks/employee-listening/user-guide.pdf",
     "e2e:content": "playwright test -c playwright.content.config.ts",
     "e2e:motion": "playwright test -c playwright.motion.config.ts",
     "e2e:calls": "playwright test -c playwright.calls.config.ts",

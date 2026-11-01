@@ -1,6 +1,6 @@
 # ADR 0002: The employee listening module, its boundaries and its defaults
 
-**Status:** Accepted, 2026-11-01.
+**Status:** Accepted, 2026-11-01; revised 2026-11-02 (D-EL-14 added).
 **Context:** `docs/tasks/employee-listening/spec.md` (version 1.0, 31 October 2026): recurring employee surveys with protected reporting, an optional human workplace review and an employer-anonymous feedback channel. Section 1.2 of the spec asks the implementation to record material departures and the reasons in the repository's decision log; this record holds them together with the choices the spec left to the implementation.
 
 ## Decisions
@@ -18,6 +18,8 @@
 11. **D-EL-11 Reviewer qualification.** A workplace reviewer is an expert with an APPROVED `expert_credentials` row whose `serviceCategory` is `workplace_review`, holding the `workplace_reviewer` template; assignment gives a CASE assignment on the engagement only. A therapist without that credential is not a workplace consultant.
 12. **D-EL-12 The booked meeting is an appointment.** Booking creates an `appointments` row with `serviceCategory = 'workplace_review'`, the reviewer as the expert and the employer requester as the employee participant, so reminders, the call room and cancellation reuse the consultations epic. Employee clinical appointments are told apart by the category, and the employer's private allowance is never involved.
 13. **D-EL-13 Disjoint cohorts only.** Reporting cohorts are the company and the departments directly under the company root (a member's primary department is the ancestor of their org unit at that level; members without one form the `unassigned` cohort). Teams, project groups and arbitrary filters are not reporting cohorts in the pilot.
+
+14. **D-EL-14 Escalation never returns a case to the primary recipient.** The hourly `feedback.escalate-overdue` job moves a case the primary let pass its response target to the route's alternate, when that person is still an eligible handler, and tells them. A case the reporter deliberately routed to the alternate, because the matter concerns the primary (spec FBK-03), is never moved back: it is marked escalated and its handler is reminded instead. A hand-over by a handler follows the same rule on the server (`same_handler`, `handler_not_eligible`).
 
 ## Consequences
 
