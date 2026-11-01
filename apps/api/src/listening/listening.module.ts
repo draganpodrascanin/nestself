@@ -8,15 +8,18 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
 import { MailerModule } from '../mailer/mailer.module.js';
 import { CyclesService } from './cycles.service.js';
+import { FinalizationService } from './finalization.service.js';
 import { ListeningConfigurationService } from './listening-configuration.service.js';
 import { ListeningJobSchedulerService } from './listening-job-scheduler.service.js';
-import { ListeningJobsService } from './listening-jobs.service.js';
+import { CYCLE_FINALIZER, ListeningJobsService } from './listening-jobs.service.js';
 import { ListeningNotifier } from './listening-notifier.js';
 import { ListeningOpsController } from './listening-ops.controller.js';
 import { ListeningController } from './listening.controller.js';
 import { ListeningRepository } from './listening.repository.js';
 import { ParticipationService } from './participation.service.js';
 import { QuestionnaireService } from './questionnaire.service.js';
+import { ReportsService } from './reports.service.js';
+import { ReviewOfferService } from './review-offer.service.js';
 
 @Module({
   imports: [AuthModule, MailerModule],
@@ -28,6 +31,10 @@ import { QuestionnaireService } from './questionnaire.service.js';
     ListeningNotifier,
     CyclesService,
     ParticipationService,
+    FinalizationService,
+    { provide: CYCLE_FINALIZER, useExisting: FinalizationService },
+    ReviewOfferService,
+    ReportsService,
     ListeningJobsService,
     ListeningJobSchedulerService,
   ],
@@ -37,6 +44,9 @@ import { QuestionnaireService } from './questionnaire.service.js';
     QuestionnaireService,
     CyclesService,
     ParticipationService,
+    FinalizationService,
+    ReportsService,
+    ReviewOfferService,
     ListeningJobsService,
     ListeningJobSchedulerService,
   ],

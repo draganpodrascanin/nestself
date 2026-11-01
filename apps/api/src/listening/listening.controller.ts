@@ -10,19 +10,33 @@
  * POST /orgs/:orgId/listening/cycles             listening.cycles.manage  orgResourceFromContext('survey_cycle')      201, 10/60 s
  * POST /orgs/:orgId/listening/cycles/:id/cancel  listening.cycles.manage  orgResourceFromContext('survey_cycle')      10/60 s
  * GET  /orgs/:orgId/listening/configuration      listening.reports.read | listening.cycles.manage (read-only view of the client's rules)
+ * GET  /orgs/:orgId/listening/overview           listening.reports.read   orgResourceFromContext('listening_report')
+ * GET  /orgs/:orgId/listening/heatmap            listening.reports.read   orgResourceFromContext('listening_report')  ?snapshotId=
+ * GET  /orgs/:orgId/listening/dimensions/:key    listening.reports.read   orgResourceFromContext('listening_report')  ?snapshotId=
+ * POST /orgs/:orgId/listening/offer/dismiss      workplace_reviews.request orgResourceFromContext('workplace_review')
  *
  * The employee routes resolve the organization from the personal context and
  * the caller's own participation row; nothing lists other participants.
  */
-import { Body, Controller, Get, HttpCode, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ACTIONS,
+  HeatmapQuerySchema,
+  ListeningDimensionKeySchema,
+  OfferDismissRequestSchema,
   SurveyCycleScheduleRequestSchema,
   SurveyDraftRequestSchema,
   SurveySubmitRequestSchema,
+  type HeatmapQuery,
   type ListeningConfigurationResponse,
+  type ListeningDimensionDetailResponse,
+  type ListeningDimensionKey,
+  type ListeningHeatmapResponse,
+  type ListeningOverviewResponse,
   type MySurveyResponse,
+  type OfferDismissRequest,
+  type OfferDismissResponse,
   type Principal,
   type SurveyCycleListResponse,
   type SurveyCycleResponse,
@@ -44,9 +58,13 @@ import { CyclesService } from './cycles.service.js';
 import { ListeningConfigurationService } from './listening-configuration.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ParticipationService } from './participation.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ReportsService } from './reports.service.js';
 
 const participationResource = personalOrgResource('survey_participation');
 const cycleResource = orgResourceFromContext('survey_cycle');
+const reportResource = orgResourceFromContext('listening_report');
+const reviewResource = orgResourceFromContext('workplace_review');
 
 @Controller()
 export class ListeningController {
@@ -54,6 +72,7 @@ export class ListeningController {
     private readonly participation: ParticipationService,
     private readonly cycles: CyclesService,
     private readonly configuration: ListeningConfigurationService,
+    private readonly reports: ReportsService,
   ) {}
 
   // ── Employee ─────────────────────────────────────────────────────────────
@@ -117,6 +136,48 @@ export class ListeningController {
     @CurrentPrincipal() principal: Principal,
   ): Promise<SurveyCycleResponse> {
     return this.cycles.cancel(orgId, id, principal);
+  }
+
+  // ── Reports (spec REP-01..03, REV-01) ─────────────────────────────────────
+
+  @Get('orgs/:orgId/listening/overview')
+  @Authorize(ACTIONS['listening.reports.read'], reportResource)
+  overview(@Param('orgId') orgId: string, @CurrentPrincipal() principal: Principal): Promise<ListeningOverviewResponse> {
+    return this.reports.overview(orgId, principal);
+  }
+
+  @Get('orgs/:orgId/listening/heatmap')
+  @Authorize(ACTIONS['listening.reports.read'], reportResource)
+  heatmap(
+    @Param('orgId') orgId: string,
+    @Query(new ZodValidationPipe(HeatmapQuerySchema)) query: HeatmapQuery,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListeningHeatmapResponse> {
+    return this.reports.heatmap(orgId, principal, query.snapshotId);
+  }
+
+  @Get('orgs/:orgId/listening/dimensions/:key')
+  @Authorize(ACTIONS['listening.reports.read'], reportResource)
+  dimension(
+    @Param('orgId') orgId: string,
+    @Param('key', new ZodValidationPipe(ListeningDimensionKeySchema)) key: ListeningDimensionKey,
+    @Query(new ZodValidationPipe(HeatmapQuerySchema)) query: HeatmapQuery,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<ListeningDimensionDetailResponse> {
+    return this.reports.dimensionDetail(orgId, principal, key, query.snapshotId);
+  }
+
+  @Post('orgs/:orgId/listening/offer/dismiss')
+  @HttpCode(200)
+  @Throttle(WRITE_THROTTLE)
+  @Authorize(ACTIONS['workplace_reviews.request'], reviewResource)
+  async dismissOffer(
+    @Param('orgId') orgId: string,
+    @Body(new ZodValidationPipe(OfferDismissRequestSchema)) body: OfferDismissRequest,
+    @CurrentPrincipal() principal: Principal,
+  ): Promise<OfferDismissResponse> {
+    await this.reports.dismissOffer(orgId, principal, body.snapshotId);
+    return { dismissed: true };
   }
 
   /** The client's rules as the organization may read them; changes come from NestSelf operations. */
