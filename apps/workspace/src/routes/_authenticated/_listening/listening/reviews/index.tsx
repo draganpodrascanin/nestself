@@ -1,18 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
-import { Heading, StatusBlock } from '@nestself/ui';
+import { isSampleDataMode } from '../../../../../data-source';
+import { listeningApi } from '../../../../../features/listening/listening-api';
+import { ReviewsScreen } from '../../../../../features/reviews/reviews-screen';
 
-/** Workplace reviews list; the review journey screens arrive with the workplace-reviews task. */
+/** Requests and engagements of the organization (spec REV-02, REV-10). */
 export const Route = createFileRoute('/_authenticated/_listening/listening/reviews/')({
-  component: ReviewsPlaceholder,
+  component: () => <ReviewsScreen listeningApi={listeningApi} sampleMode={isSampleDataMode} />,
 });
-
-function ReviewsPlaceholder() {
-  const { t } = useTranslation(['listening', 'library']);
-  return (
-    <div className="space-y-6">
-      <Heading level={1}>{t('listening:nav.reviews')}</Heading>
-      <StatusBlock state="empty" title={t('library:requests.comingSoon.title')} body={t('library:requests.comingSoon.body')} />
-    </div>
-  );
-}

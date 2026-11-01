@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, Link, redirect } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
-import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, Siren, Fingerprint, VideoCamera, Lifebuoy, Presentation, ClipboardText } from '@phosphor-icons/react';
+import { House, Users, Buildings, Article, CalendarCheck, GearSix, ShieldCheck, Siren, Fingerprint, VideoCamera, Lifebuoy, Presentation, ClipboardText, ListChecks, Briefcase } from '@phosphor-icons/react';
 import { AppShell, NavItem, StatusBlock } from '@nestself/ui';
 import { can } from '@nestself/contracts';
 import { useAuth, resolveRouteAuth, AuthenticatedErrorComponent } from '../auth';
@@ -55,6 +55,12 @@ function AuthenticatedLayout() {
   const showSso = can(principal, 'sso.manage', undefined, effectiveActions);
   // Convenience only: `/ops/listening/questionnaires` enforces `listening.templates.write`.
   const showQuestionnaires = can(principal, 'listening.templates.write', undefined, effectiveActions);
+  // Convenience only: `/ops/workplace-reviews/*` enforces `workplace_reviews.coordinate`.
+  const showReviewQueue = can(principal, 'workplace_reviews.coordinate', undefined, effectiveActions);
+  // The reviewer's engagements (spec REV-07): `/expert/workplace-reviews/*` enforces the assignment.
+  const engagementsNav = can(principal, 'workplace_reviews.report.write', undefined, effectiveActions)
+    ? [{ to: '/reviews/engagements' as const, icon: Briefcase, label: t('listening:nav.engagements') }]
+    : [];
   const consultationsNav = canListConsultations(principal, effectiveActions)
     ? [{ to: '/consultations' as const, icon: VideoCamera, label: t('calls:consultations.nav') }]
     : [];
@@ -81,11 +87,13 @@ function AuthenticatedLayout() {
         ...(showEmergency ? [{ to: '/emergency' as const, icon: Siren, label: t('nav.emergency') }] : []),
         ...(showSso ? [{ to: '/sso' as const, icon: Fingerprint, label: t('nav.sso') }] : []),
         ...(showQuestionnaires ? [{ to: '/listening/questionnaires' as const, icon: ClipboardText, label: t('listening:nav.questionnaires') }] : []),
+        ...(showReviewQueue ? [{ to: '/workplace-reviews' as const, icon: ListChecks, label: t('listening:nav.reviewQueue') }] : []),
+        ...engagementsNav,
         { to: '/cms/resources' as const, icon: Article, label: t('nav.content') },
         { to: '/event-requests' as const, icon: CalendarCheck, label: t('nav.eventRequests') },
         { to: '/settings' as const, icon: GearSix, label: t('nav.settings') },
       ]
-    : [...consultationsNav, ...webinarsNav, { to: '/settings' as const, icon: GearSix, label: t('nav.settings') }];
+    : [...consultationsNav, ...webinarsNav, ...engagementsNav, { to: '/settings' as const, icon: GearSix, label: t('nav.settings') }];
 
   return (
     <AppShell

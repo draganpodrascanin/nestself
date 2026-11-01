@@ -104,4 +104,39 @@ describe('createListeningApi', () => {
     responder = () => ({ status: 200, body: { ...handlerCase, reporterUserId: 'leak' } });
     await expect(api().handlerCase('fc1')).rejects.toBeInstanceOf(ApiError);
   });
+  it('targets the workplace review routes of the organization, operations and the reviewer', async () => {
+    responder = () => ({ status: 200, body: { workplaceReviewsEnabled: true, items: [] } });
+    await api().reviewServices('org_1');
+    expect(calls[0]!.url).toBe('https://api.test/api/orgs/org_1/workplace-reviews/services');
+
+    const request = {
+      id: 'req_1', status: 'submitted', scopeCohortKey: 'company', dimensionKeys: ['sustainable_workload'], snapshotIds: ['s1'], serviceId: null, shareAggregates: true,
+      context: null, termsVersion: '2026-11', noticeVersion: '2026-11', createdAt: '2026-11-02T09:00:00.000Z', coordinatorFirstName: null, declineReason: null,
+      informationRequest: null, informationAnswer: null, scopes: [], engagementId: null,
+    };
+    responder = () => ({ status: 201, body: request });
+    await api().createReviewRequest('org_1', { snapshotIds: ['s1'], scopeCohortKey: 'company', dimensionKeys: ['sustainable_workload'], shareAggregates: true, termsVersion: '2026-11', noticeVersion: '2026-11' }, 'key-7');
+    expect(calls[1]!.url).toBe('https://api.test/api/orgs/org_1/workplace-reviews/requests');
+    expect(new Headers(calls[1]!.init.headers).get('Idempotency-Key')).toBe('key-7');
+
+    responder = () => ({ status: 200, body: { items: [] } });
+    await api().reviewQueue();
+    expect(calls[2]!.url).toBe('https://api.test/api/ops/workplace-reviews/requests');
+    await api().reviewerCandidates('mil');
+    expect(calls[3]!.url).toBe('https://api.test/api/ops/workplace-reviews/reviewers?q=mil');
+    await api().myEngagements();
+    expect(calls[4]!.url).toBe('https://api.test/api/expert/workplace-reviews/engagements');
+
+    responder = () => ({ status: 200, body: { rejected: true } });
+    await api().rejectReviewScope('org_1', 'scope_1');
+    expect(calls[5]!.url).toBe('https://api.test/api/orgs/org_1/workplace-reviews/scopes/scope_1/reject');
+    expect(calls[5]!.init.method).toBe('POST');
+
+    responder = () => ({ status: 200, body: { ...request, reporterUserId: 'leak' } });
+    await expect(api().reviewRequest('org_1', 'req_1')).rejects.toBeInstanceOf(ApiError);
+
+    responder = () => ({ status: 200, body: { workplaceReviewsEnabled: true, items: [] } });
+    await api().opsReviewServices();
+    expect(calls[calls.length - 1]!.url).toBe('https://api.test/api/ops/workplace-reviews/services');
+  });
 });

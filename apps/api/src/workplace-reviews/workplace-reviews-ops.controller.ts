@@ -3,6 +3,7 @@
  * REV-03, REV-05, OPS-02), in the operations context with
  * `workplace_reviews.coordinate`.
  *
+ * GET  /ops/workplace-reviews/services                   the service catalogue for the scope form
  * GET  /ops/workplace-reviews/requests                   the queue: organization, scope, status, owner, response target
  * GET  /ops/workplace-reviews/requests/:id
  * POST /ops/workplace-reviews/requests/:id/triage        in_review | needs_information | declined           10/60 s
@@ -27,6 +28,7 @@ import {
   type ReviewCancelRequest,
   type ReviewEngagementResponse,
   type ReviewQueueResponse,
+  type ReviewServicesResponse,
   type ReviewRequestOpsResponse,
   type ReviewScopeCreateRequest,
   type ReviewTriageRequest,
@@ -54,6 +56,12 @@ export class WorkplaceReviewsOpsController {
     private readonly scopes: ReviewScopesService,
     private readonly engagements: ReviewEngagementsService,
   ) {}
+
+  @Get('services')
+  @Authorize(ACTIONS['workplace_reviews.coordinate'], operationsResource('review_request'))
+  services(): Promise<ReviewServicesResponse> {
+    return this.requests.catalogue();
+  }
 
   @Get('requests')
   @Authorize(ACTIONS['workplace_reviews.coordinate'], operationsResource('review_request'))

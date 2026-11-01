@@ -60,6 +60,12 @@ export class ReviewRequestsService {
     return { workplaceReviewsEnabled: enabled, items: rows.map(toServiceView) };
   }
 
+  /** The platform catalogue for the coordinator's scope form (OPS-02); the entitlement is the client's, so it is not evaluated here. */
+  async catalogue(): Promise<ReviewServicesResponse> {
+    const rows = await this.repo.listServices();
+    return { workplaceReviewsEnabled: true, items: rows.map(toServiceView) };
+  }
+
   async create(orgId: string, body: ReviewRequestCreateRequest, principal: Principal, now = new Date()): Promise<ReviewRequestResponse> {
     if (!(await this.configuration.isEnabled(orgId, 'workplaceReviews', now))) {
       throw conflict('workplace_reviews_disabled', 'Workplace reviews are not enabled for this organization');

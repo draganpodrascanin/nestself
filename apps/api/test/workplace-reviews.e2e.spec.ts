@@ -210,6 +210,10 @@ describe.skipIf(!shouldRun)('Workplace reviews (e2e)', () => {
   });
 
   it('the coordinator sees the queue with a response target, triages and sends a scope; the requester is told without the price', async () => {
+    const catalogue = await get(nikola, '/ops/workplace-reviews/services');
+    expect(catalogue.status, JSON.stringify(catalogue.body)).toBe(200);
+    expect(catalogue.body.items.map((s: { key: string }) => s.key).sort()).toEqual(['introductory_call', 'workplace_review']);
+
     const queue = await get(nikola, '/ops/workplace-reviews/requests');
     expect(queue.status, JSON.stringify(queue.body)).toBe(200);
     expect(queue.body.items).toHaveLength(1);

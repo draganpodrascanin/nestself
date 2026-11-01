@@ -1,18 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
-import { Heading, StatusBlock } from '@nestself/ui';
+import { isSampleDataMode } from '../../../../../data-source';
+import { listeningApi } from '../../../../../features/listening/listening-api';
+import { RequestReviewScreen } from '../../../../../features/reviews/request-review-screen';
 
-/** The review request form; arrives with the workplace-reviews task. */
+/** The review request form (spec REV-02). Opening it creates nothing; one send creates one request. */
 export const Route = createFileRoute('/_authenticated/_listening/listening/reviews/new')({
-  component: RequestPlaceholder,
+  component: () => <RequestReviewScreen listeningApi={listeningApi} sampleMode={isSampleDataMode} />,
 });
-
-function RequestPlaceholder() {
-  const { t } = useTranslation(['listening', 'library']);
-  return (
-    <div className="space-y-6">
-      <Heading level={1}>{t('listening:offer.action')}</Heading>
-      <StatusBlock state="empty" title={t('library:requests.comingSoon.title')} body={t('library:requests.comingSoon.body')} />
-    </div>
-  );
-}

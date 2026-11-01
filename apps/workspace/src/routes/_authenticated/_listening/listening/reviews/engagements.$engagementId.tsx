@@ -1,18 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
-import { Heading, StatusBlock } from '@nestself/ui';
+import { isSampleDataMode } from '../../../../../data-source';
+import { listeningApi } from '../../../../../features/listening/listening-api';
+import { EngagementScreen } from '../../../../../features/reviews/engagement-screen';
 
-/** One engagement; arrives with the workplace-reviews task. */
+/** One engagement: meeting, sharing, report, actions and follow-up (spec REV-04..10). */
 export const Route = createFileRoute('/_authenticated/_listening/listening/reviews/engagements/$engagementId')({
-  component: EngagementPlaceholder,
+  component: EngagementPage,
 });
 
-function EngagementPlaceholder() {
-  const { t } = useTranslation(['listening', 'library']);
-  return (
-    <div className="space-y-6">
-      <Heading level={1}>{t('listening:offer.viewEngagement')}</Heading>
-      <StatusBlock state="empty" title={t('library:requests.comingSoon.title')} body={t('library:requests.comingSoon.body')} />
-    </div>
-  );
+function EngagementPage() {
+  const { engagementId } = Route.useParams();
+  return <EngagementScreen listeningApi={listeningApi} sampleMode={isSampleDataMode} engagementId={engagementId} />;
 }
