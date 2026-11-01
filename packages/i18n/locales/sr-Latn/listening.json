@@ -10,11 +10,26 @@
     "reviews": "Pregledi radnog okruženja"
   },
   "dimensions": {
-    "job_satisfaction": { "title": "Zadovoljstvo poslom", "short": "Zadovoljstvo" },
-    "sustainable_workload": { "title": "Održiv obim posla", "short": "Obim posla" },
-    "manager_support": { "title": "Podrška rukovodioca", "short": "Rukovodilac" },
-    "speaking_up": { "title": "Slobodno ukazivanje na probleme", "short": "Ukazivanje" },
-    "belonging_respect": { "title": "Pripadnost i poštovanje", "short": "Pripadnost" }
+    "job_satisfaction": {
+      "title": "Zadovoljstvo poslom",
+      "short": "Zadovoljstvo"
+    },
+    "sustainable_workload": {
+      "title": "Održiv obim posla",
+      "short": "Obim posla"
+    },
+    "manager_support": {
+      "title": "Podrška rukovodioca",
+      "short": "Rukovodilac"
+    },
+    "speaking_up": {
+      "title": "Slobodno ukazivanje na probleme",
+      "short": "Ukazivanje"
+    },
+    "belonging_respect": {
+      "title": "Pripadnost i poštovanje",
+      "short": "Pripadnost"
+    }
   },
   "status": {
     "good": "Dobro",
@@ -247,5 +262,125 @@
     "rateLimited": "Previše pokušaja. Sačekajte trenutak i pokušajte ponovo.",
     "conflict": "Ova radnja nije moguća u trenutnom stanju.",
     "unknown": "Nešto nije u redu. Pokušajte ponovo."
+  },
+  "questionnaires": {
+    "title": "Upitnici",
+    "lead": "Verzije ankete od pet pitanja. Formulacije se pišu po jeziku; ključevi, skala od 1 do 5 i način bodovanja se ne menjaju. Verzija se objavljuje nakon pregleda i potom ostaje zamrznuta.",
+    "newDraft": "Novi nacrt",
+    "newDraftHint": "Polazi od poslednje objavljene formulacije i ostaje uporediv sa njom.",
+    "empty": "Još nema verzija upitnika.",
+    "sampleNote": "Probni režim: nacrti se ne čuvaju i ništa se ne objavljuje.",
+    "columns": {
+      "version": "Verzija",
+      "status": "Status",
+      "created": "Napravljeno",
+      "published": "Objavljeno",
+      "comparable": "Uporedivo sa",
+      "actions": "Radnje"
+    },
+    "version": "Verzija {{version}}",
+    "status": {
+      "draft": "Nacrt",
+      "in_review": "Na pregledu",
+      "published": "Objavljeno",
+      "archived": "Arhivirano"
+    },
+    "notComparable": "Nije uporedivo",
+    "actions": {
+      "edit": "Izmeni",
+      "view": "Prikaži",
+      "submitReview": "Pošalji na pregled",
+      "publish": "Objavi",
+      "archive": "Arhiviraj"
+    },
+    "publishTitle": "Objaviti verziju {{version}}?",
+    "publishBody": "Zaposleni vide ovu formulaciju u svakom ciklusu pokrenutom od sada. Objavljena verzija se ne može menjati; za izmene je potrebna nova verzija.",
+    "publishConfirm": "Objavi",
+    "archiveTitle": "Arhivirati verziju {{version}}?",
+    "archiveBody": "Arhivirana verzija se ne može dodeliti klijentima. Objavljeni rezultati koji su je koristili ostaju čitljivi.",
+    "archiveConfirm": "Arhiviraj",
+    "toastPublished": "Verzija {{version}} je objavljena.",
+    "toastSubmitted": "Verzija {{version}} je poslata na pregled.",
+    "toastArchived": "Verzija {{version}} je arhivirana.",
+    "toastSaved": "Nacrt je sačuvan.",
+    "toastCreated": "Novi nacrt je napravljen.",
+    "editor": {
+      "createTitle": "Nova verzija upitnika",
+      "editTitle": "Izmena verzije {{version}}",
+      "viewTitle": "Verzija {{version}}",
+      "readOnly": "Ova verzija je zamrznuta. Napravite novi nacrt da biste promenili formulaciju.",
+      "languages": "Formulacija po jeziku",
+      "comparableWith": "Uporedivo sa",
+      "comparableHint": "Objavljena verzija sa kojom ova zadržava isto značenje i skalu, tako da se trendovi nastavljaju. Izaberite „nije uporedivo“ kada pitanje menja značenje.",
+      "comparableNone": "Nije uporedivo sa ranijom verzijom",
+      "notice": "Obaveštenje o privatnosti",
+      "noticeHint": "Prikazuje se svakom zaposlenom pre prvog pitanja.",
+      "question": "Pitanje",
+      "scaleLow": "Oznaka za 1",
+      "scaleHigh": "Oznaka za 5",
+      "explanation": "Objašnjenje za izveštaj poslodavcu",
+      "fillCyrillic": "Popuni ćirilicu iz latinice",
+      "fillCyrillicDone": "Ćirilična formulacija je popunjena iz latinične. Proverite je pre čuvanja.",
+      "save": "Sačuvaj nacrt",
+      "saving": "Čuvanje",
+      "close": "Zatvori",
+      "errorsTitle": "Nacrt još ne može da se sačuva",
+      "required": "{{field}} ({{language}}) je obavezno.",
+      "tooLong": "{{field}} ({{language}}) je duže od {{max}} znakova."
+    },
+    "preview": {
+      "title": "Pregled kao zaposleni",
+      "lead": "Tačno ono što zaposleni čita, na izabranom jeziku i veličini ekrana.",
+      "language": "Jezik pregleda",
+      "frame": "Ekran",
+      "phone": "Telefon",
+      "desktop": "Računar",
+      "dimension": "Pitanje za pregled"
+    }
+  },
+  "clientConfig": {
+    "title": "Podešavanja slušanja",
+    "lead": "Prava i pravila izveštavanja za ovog klijenta. Izmene važe za buduće cikluse; objavljeni rezultati zadržavaju pravila po kojima su izračunati.",
+    "sampleNote": "Probni režim: podešavanja se ne mogu menjati.",
+    "capabilities": "Mogućnosti",
+    "capabilitiesHint": "Mogućnost je uključena između navedenih datuma. Ostavite „Do“ prazno ako nema krajnjeg datuma.",
+    "measurement": "Ankete i izveštaji",
+    "feedback": "Kanal za povratne informacije zaposlenih",
+    "workplaceReviews": "Pregledi radnog okruženja",
+    "from": "Od",
+    "until": "Do",
+    "sensitive": "Put za osetljive povratne informacije",
+    "sensitiveHint": "Omogućava zaposlenima da slučaj označe kao osetljiv, tako da ga vidi samo određeni obrađivač.",
+    "rules": "Pravila anketa i izveštavanja",
+    "cadence": "Ritam (dana između pokretanja)",
+    "window": "Period za odgovore (dana)",
+    "reminders": "Podsetnika po ciklusu",
+    "freshness": "Rezultat važi kao aktuelan (dana)",
+    "minimumCohort": "Najmanji broj ispitanika po grupi",
+    "minimumCohortHint": "Nikada ispod donje granice platforme od {{min}}.",
+    "goodThreshold": "Dobro od (%)",
+    "monitorThreshold": "Pratiti od (%)",
+    "thresholdHint": "Ispod „Pratiti“ je „Opasnost“. Celi brojevi ili jedna decimala.",
+    "questionnaire": "Verzija upitnika",
+    "questionnaireNone": "Nije dodeljena",
+    "questionnaireHint": "Mogu se dodeliti samo objavljene verzije.",
+    "questionnaireUnknown": "Verzija sa oznakom {{id}}",
+    "nextLaunch": "Sledeće automatsko pokretanje",
+    "nextLaunchHint": "Ostavite prazno da zaustavite automatska pokretanja; ciklusi tada počinju samo kada ih klijent zakaže. Prikazano u vremenu vašeg pregledača; vremenska zona klijenta je {{zone}}.",
+    "state": "Verzija pravila {{version}}, poslednja izmena {{date}}",
+    "save": "Sačuvaj izmene",
+    "saving": "Čuvanje",
+    "saved": "Podešavanja su sačuvana. Budući ciklusi koriste verziju pravila {{version}}.",
+    "nothingChanged": "Ništa nije promenjeno.",
+    "errorsTitle": "Podešavanja još ne mogu da se sačuvaju",
+    "errors": {
+      "minimumCohort": "Mora biti najmanje {{min}}.",
+      "number": "Unesite ceo broj između {{min}} i {{max}}.",
+      "percent": "Unesite procenat između 0 i 100.",
+      "thresholds": "„Pratiti“ mora biti ispod „Dobro“.",
+      "window": "Period za odgovore ne može biti duži od ritma.",
+      "dates": "„Do“ mora biti posle „Od“.",
+      "dateTime": "Unesite datum i vreme."
+    }
   }
 }

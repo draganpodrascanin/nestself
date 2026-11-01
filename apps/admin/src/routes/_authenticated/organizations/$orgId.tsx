@@ -23,6 +23,7 @@ function OrgDetailLayout() {
   const allowed = (action: string) => (principal ? can(principal, action, undefined, effectiveActions) : false);
   const showPeople = allowed('client.configure');
   const showAccess = allowed('access.preview');
+  const showListening = allowed('listening.configure');
 
   return (
     <div>
@@ -60,6 +61,17 @@ function OrgDetailLayout() {
             activeProps={ACTIVE_TAB}
           >
             {t('organizations.tabs.access')}
+          </Link>
+        ) : null}
+        {showListening ? (
+          <Link
+            to="/organizations/$orgId/listening"
+            params={{ orgId }}
+            className={TAB_CLASS}
+            inactiveProps={INACTIVE_TAB}
+            activeProps={ACTIVE_TAB}
+          >
+            {t('listening:nav.listening')}
           </Link>
         ) : null}
       </nav>

@@ -10,11 +10,26 @@
     "reviews": "Munkahelyi felülvizsgálatok"
   },
   "dimensions": {
-    "job_satisfaction": { "title": "Munkahelyi elégedettség", "short": "Elégedettség" },
-    "sustainable_workload": { "title": "Fenntartható munkaterhelés", "short": "Munkaterhelés" },
-    "manager_support": { "title": "Vezetői támogatás", "short": "Vezető" },
-    "speaking_up": { "title": "Problémák felvetése", "short": "Felvetés" },
-    "belonging_respect": { "title": "Összetartozás és tisztelet", "short": "Összetartozás" }
+    "job_satisfaction": {
+      "title": "Munkahelyi elégedettség",
+      "short": "Elégedettség"
+    },
+    "sustainable_workload": {
+      "title": "Fenntartható munkaterhelés",
+      "short": "Munkaterhelés"
+    },
+    "manager_support": {
+      "title": "Vezetői támogatás",
+      "short": "Vezető"
+    },
+    "speaking_up": {
+      "title": "Problémák felvetése",
+      "short": "Felvetés"
+    },
+    "belonging_respect": {
+      "title": "Összetartozás és tisztelet",
+      "short": "Összetartozás"
+    }
   },
   "status": {
     "good": "Jó",
@@ -247,5 +262,125 @@
     "rateLimited": "Túl sok próbálkozás. Várjon egy pillanatot, és próbálja újra.",
     "conflict": "Ez a művelet a jelenlegi állapotban nem lehetséges.",
     "unknown": "Hiba történt. Próbálja újra."
+  },
+  "questionnaires": {
+    "title": "Kérdőívek",
+    "lead": "Az ötkérdéses felmérés verziói. A szöveg nyelvenként készül; a kulcsok, az 1-től 5-ig terjedő skála és a pontozás soha nem változik. Egy verzió átnézés után jelenik meg, és utána rögzítve marad.",
+    "newDraft": "Új vázlat",
+    "newDraftHint": "A legutóbb közzétett szövegből indul, és összehasonlítható marad vele.",
+    "empty": "Még nincs kérdőívverzió.",
+    "sampleNote": "Mintamód: a vázlatok nem kerülnek mentésre, és semmi nem jelenik meg.",
+    "columns": {
+      "version": "Verzió",
+      "status": "Állapot",
+      "created": "Létrehozva",
+      "published": "Közzétéve",
+      "comparable": "Összehasonlítható ezzel",
+      "actions": "Műveletek"
+    },
+    "version": "{{version}}. verzió",
+    "status": {
+      "draft": "Vázlat",
+      "in_review": "Átnézés alatt",
+      "published": "Közzétéve",
+      "archived": "Archiválva"
+    },
+    "notComparable": "Nem összehasonlítható",
+    "actions": {
+      "edit": "Szerkesztés",
+      "view": "Megtekintés",
+      "submitReview": "Beküldés átnézésre",
+      "publish": "Közzététel",
+      "archive": "Archiválás"
+    },
+    "publishTitle": "Közzéteszi a {{version}}. verziót?",
+    "publishBody": "A munkavállalók ezt a szöveget látják minden mostantól indított ciklusban. A közzétett verzió nem szerkeszthető; a módosításhoz új verzió kell.",
+    "publishConfirm": "Közzététel",
+    "archiveTitle": "Archiválja a {{version}}. verziót?",
+    "archiveBody": "Az archivált verzió nem rendelhető ügyfelekhez. Az ezt használó közzétett eredmények olvashatók maradnak.",
+    "archiveConfirm": "Archiválás",
+    "toastPublished": "A {{version}}. verzió közzétéve.",
+    "toastSubmitted": "A {{version}}. verzió átnézésre beküldve.",
+    "toastArchived": "A {{version}}. verzió archiválva.",
+    "toastSaved": "A vázlat mentve.",
+    "toastCreated": "Új vázlat létrehozva.",
+    "editor": {
+      "createTitle": "Új kérdőívverzió",
+      "editTitle": "A {{version}}. verzió szerkesztése",
+      "viewTitle": "{{version}}. verzió",
+      "readOnly": "Ez a verzió rögzített. A szöveg módosításához hozzon létre új vázlatot.",
+      "languages": "Szöveg nyelvenként",
+      "comparableWith": "Összehasonlítható ezzel",
+      "comparableHint": "Az a közzétett verzió, amellyel ez azonos jelentést és skálát tart, hogy a trendek folytatódjanak. Válasszon „nem összehasonlítható”-t, ha egy kérdés jelentése megváltozik.",
+      "comparableNone": "Nem összehasonlítható korábbi verzióval",
+      "notice": "Adatvédelmi tájékoztató",
+      "noticeHint": "Minden munkavállaló látja az első kérdés előtt.",
+      "question": "Kérdés",
+      "scaleLow": "Felirat az 1-hez",
+      "scaleHigh": "Felirat az 5-höz",
+      "explanation": "Magyarázat a munkáltatói jelentéshez",
+      "fillCyrillic": "Cirill kitöltése a latinból",
+      "fillCyrillicDone": "A cirill szöveg a latin szövegből kitöltve. Mentés előtt ellenőrizze.",
+      "save": "Vázlat mentése",
+      "saving": "Mentés",
+      "close": "Bezárás",
+      "errorsTitle": "A vázlat még nem menthető",
+      "required": "{{field}} ({{language}}) kötelező.",
+      "tooLong": "{{field}} ({{language}}) hosszabb {{max}} karakternél."
+    },
+    "preview": {
+      "title": "Munkavállalói előnézet",
+      "lead": "Pontosan az, amit a munkavállaló olvas, a kiválasztott nyelven és képernyőméreten.",
+      "language": "Előnézet nyelve",
+      "frame": "Képernyő",
+      "phone": "Telefon",
+      "desktop": "Számítógép",
+      "dimension": "Előnézett kérdés"
+    }
+  },
+  "clientConfig": {
+    "title": "Figyelés beállításai",
+    "lead": "Jogosultságok és jelentési szabályok ennél az ügyfélnél. A módosítások a jövőbeli ciklusokra vonatkoznak; a közzétett eredmények megtartják a kiszámításukhoz használt szabályokat.",
+    "sampleNote": "Mintamód: a beállítások nem módosíthatók.",
+    "capabilities": "Képességek",
+    "capabilitiesHint": "Egy képesség a megadott dátumok között aktív. Hagyja üresen az „Eddig” mezőt, ha nincs záródátum.",
+    "measurement": "Felmérések és jelentések",
+    "feedback": "Munkavállalói visszajelzési csatorna",
+    "workplaceReviews": "Munkahelyi átvilágítások",
+    "from": "Ettől",
+    "until": "Eddig",
+    "sensitive": "Érzékeny visszajelzési út",
+    "sensitiveHint": "Lehetővé teszi, hogy a munkavállalók érzékenynek jelöljenek egy esetet, így azt csak a kijelölt kezelő látja.",
+    "rules": "Felmérési és jelentési szabályok",
+    "cadence": "Ütem (napok az indítások között)",
+    "window": "Válaszadási időszak (nap)",
+    "reminders": "Emlékeztetők ciklusonként",
+    "freshness": "Az eredmény ennyi napig számít aktuálisnak",
+    "minimumCohort": "Legkisebb válaszadószám csoportonként",
+    "minimumCohortHint": "Soha nem lehet a platform {{min}} fős alsó határa alatt.",
+    "goodThreshold": "Jó ettől (%)",
+    "monitorThreshold": "Figyelendő ettől (%)",
+    "thresholdHint": "A „Figyelendő” alatt „Veszély”. Egész számok vagy egy tizedesjegy.",
+    "questionnaire": "Kérdőívverzió",
+    "questionnaireNone": "Nincs hozzárendelve",
+    "questionnaireHint": "Csak közzétett verziók rendelhetők hozzá.",
+    "questionnaireUnknown": "Verzió, azonosító: {{id}}",
+    "nextLaunch": "Következő automatikus indítás",
+    "nextLaunchHint": "Hagyja üresen az automatikus indítások leállításához; a ciklusok akkor csak az ügyfél ütemezésére indulnak. A böngésző idejében jelenik meg; az ügyfél időzónája: {{zone}}.",
+    "state": "Szabályok {{version}}. verziója, utoljára módosítva: {{date}}",
+    "save": "Módosítások mentése",
+    "saving": "Mentés",
+    "saved": "A beállítások mentve. A jövőbeli ciklusok a szabályok {{version}}. verzióját használják.",
+    "nothingChanged": "Semmi nem változott.",
+    "errorsTitle": "A beállítások még nem menthetők",
+    "errors": {
+      "minimumCohort": "Legalább {{min}} kell legyen.",
+      "number": "Adjon meg egy egész számot {{min}} és {{max}} között.",
+      "percent": "Adjon meg egy százalékot 0 és 100 között.",
+      "thresholds": "A „Figyelendő” a „Jó” alatt kell legyen.",
+      "window": "A válaszadási időszak nem lehet hosszabb az ütemnél.",
+      "dates": "Az „Eddig” az „Ettől” után kell legyen.",
+      "dateTime": "Adjon meg dátumot és időt."
+    }
   }
 }

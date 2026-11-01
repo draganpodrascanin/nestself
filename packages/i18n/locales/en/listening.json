@@ -10,11 +10,26 @@
     "reviews": "Workplace reviews"
   },
   "dimensions": {
-    "job_satisfaction": { "title": "Job satisfaction", "short": "Satisfaction" },
-    "sustainable_workload": { "title": "Sustainable workload", "short": "Workload" },
-    "manager_support": { "title": "Manager support", "short": "Manager" },
-    "speaking_up": { "title": "Speaking up", "short": "Speaking up" },
-    "belonging_respect": { "title": "Belonging and respect", "short": "Belonging" }
+    "job_satisfaction": {
+      "title": "Job satisfaction",
+      "short": "Satisfaction"
+    },
+    "sustainable_workload": {
+      "title": "Sustainable workload",
+      "short": "Workload"
+    },
+    "manager_support": {
+      "title": "Manager support",
+      "short": "Manager"
+    },
+    "speaking_up": {
+      "title": "Speaking up",
+      "short": "Speaking up"
+    },
+    "belonging_respect": {
+      "title": "Belonging and respect",
+      "short": "Belonging"
+    }
   },
   "status": {
     "good": "Good",
@@ -247,5 +262,125 @@
     "rateLimited": "Too many attempts. Wait a moment and try again.",
     "conflict": "This action is not possible in the current state.",
     "unknown": "Something went wrong. Try again."
+  },
+  "questionnaires": {
+    "title": "Questionnaires",
+    "lead": "Versions of the five-question survey. The wording is written per language; the keys, the 1 to 5 scale and the scoring never change. A version is published after review and then stays frozen.",
+    "newDraft": "New draft",
+    "newDraftHint": "Starts from the latest published wording and stays comparable with it.",
+    "empty": "No questionnaire versions yet.",
+    "sampleNote": "Sample mode: drafts are not saved and nothing is published.",
+    "columns": {
+      "version": "Version",
+      "status": "Status",
+      "created": "Created",
+      "published": "Published",
+      "comparable": "Comparable with",
+      "actions": "Actions"
+    },
+    "version": "Version {{version}}",
+    "status": {
+      "draft": "Draft",
+      "in_review": "In review",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "notComparable": "Not comparable",
+    "actions": {
+      "edit": "Edit",
+      "view": "View",
+      "submitReview": "Submit for review",
+      "publish": "Publish",
+      "archive": "Archive"
+    },
+    "publishTitle": "Publish version {{version}}?",
+    "publishBody": "Employees see this wording in every cycle launched from now on. A published version cannot be edited; changes need a new version.",
+    "publishConfirm": "Publish",
+    "archiveTitle": "Archive version {{version}}?",
+    "archiveBody": "An archived version cannot be assigned to clients. Published results that used it stay readable.",
+    "archiveConfirm": "Archive",
+    "toastPublished": "Version {{version}} is published.",
+    "toastSubmitted": "Version {{version}} was sent for review.",
+    "toastArchived": "Version {{version}} was archived.",
+    "toastSaved": "The draft was saved.",
+    "toastCreated": "A new draft was created.",
+    "editor": {
+      "createTitle": "New questionnaire version",
+      "editTitle": "Edit version {{version}}",
+      "viewTitle": "Version {{version}}",
+      "readOnly": "This version is frozen. Create a new draft to change the wording.",
+      "languages": "Wording per language",
+      "comparableWith": "Comparable with",
+      "comparableHint": "The published version this one keeps the same meaning and scale as, so trends continue. Choose none when a question changes meaning.",
+      "comparableNone": "Not comparable with an earlier version",
+      "notice": "Privacy notice",
+      "noticeHint": "Shown to every employee before the first question.",
+      "question": "Question",
+      "scaleLow": "Label for 1",
+      "scaleHigh": "Label for 5",
+      "explanation": "Explanation for the employer report",
+      "fillCyrillic": "Fill Cyrillic from Latin",
+      "fillCyrillicDone": "The Cyrillic wording was filled from the Latin wording. Check it before saving.",
+      "save": "Save draft",
+      "saving": "Saving",
+      "close": "Close",
+      "errorsTitle": "The draft cannot be saved yet",
+      "required": "{{field}} ({{language}}) is required.",
+      "tooLong": "{{field}} ({{language}}) is longer than {{max}} characters."
+    },
+    "preview": {
+      "title": "Employee preview",
+      "lead": "Exactly what an employee reads, in the chosen language and screen size.",
+      "language": "Preview language",
+      "frame": "Screen",
+      "phone": "Phone",
+      "desktop": "Desktop",
+      "dimension": "Question to preview"
+    }
+  },
+  "clientConfig": {
+    "title": "Listening configuration",
+    "lead": "Entitlements and reporting rules for this client. Changes apply to future cycles; published results keep the rules they were computed with.",
+    "sampleNote": "Sample mode: the configuration cannot be changed.",
+    "capabilities": "Capabilities",
+    "capabilitiesHint": "A capability is on between its dates. Leave Until empty for no end date.",
+    "measurement": "Surveys and reports",
+    "feedback": "Employee feedback channel",
+    "workplaceReviews": "Workplace reviews",
+    "from": "From",
+    "until": "Until",
+    "sensitive": "Sensitive feedback route",
+    "sensitiveHint": "Lets employees mark a case as sensitive so that only the designated handler sees it.",
+    "rules": "Survey and reporting rules",
+    "cadence": "Cadence (days between launches)",
+    "window": "Response window (days)",
+    "reminders": "Reminders per cycle",
+    "freshness": "A result stays current for (days)",
+    "minimumCohort": "Minimum respondents per group",
+    "minimumCohortHint": "Never below the platform floor of {{min}}.",
+    "goodThreshold": "Good from (%)",
+    "monitorThreshold": "Monitor from (%)",
+    "thresholdHint": "Below Monitor is Danger. Whole numbers or one decimal.",
+    "questionnaire": "Questionnaire version",
+    "questionnaireNone": "None assigned",
+    "questionnaireHint": "Only published versions can be assigned.",
+    "questionnaireUnknown": "Version id {{id}}",
+    "nextLaunch": "Next automatic launch",
+    "nextLaunchHint": "Leave empty to stop automatic launches; cycles then start only when the client schedules one. Shown in your browser's time; the client's time zone is {{zone}}.",
+    "state": "Rules version {{version}}, last changed {{date}}",
+    "save": "Save changes",
+    "saving": "Saving",
+    "saved": "The configuration was saved. Future cycles use rules version {{version}}.",
+    "nothingChanged": "Nothing was changed.",
+    "errorsTitle": "The configuration cannot be saved yet",
+    "errors": {
+      "minimumCohort": "Must be at least {{min}}.",
+      "number": "Enter a whole number between {{min}} and {{max}}.",
+      "percent": "Enter a percentage between 0 and 100.",
+      "thresholds": "Monitor must be below Good.",
+      "window": "The response window cannot be longer than the cadence.",
+      "dates": "Until must be after From.",
+      "dateTime": "Enter a date and time."
+    }
   }
 }

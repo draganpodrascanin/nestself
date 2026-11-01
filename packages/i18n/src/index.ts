@@ -26,3 +26,6 @@ export {
   formatDateTime,
   formatLanguages,
 } from './format';
+
+// Serbian Cyrillic from Latin (the same rules as the catalog build)
+export { transliterate, transliterateObject } from './transliterate';

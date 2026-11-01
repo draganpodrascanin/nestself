@@ -182,7 +182,14 @@
       "reporting_user": "Korisnik izveštaja",
       "employee": "Zaposleni",
       "event_supplier": "Dobavljač za događaje",
-      "delegated": "Delegirani pristup"
+      "delegated": "Delegirani pristup",
+      "survey_administrator": "Administrator anketa",
+      "feedback_handler": "Obrađivač povratnih informacija",
+      "workplace_review_requester": "Podnosilac zahteva za pregled radnog okruženja",
+      "workplace_review_approver": "Odobravalac pregleda radnog okruženja",
+      "listening_administrator": "Administrator slušanja",
+      "review_coordinator": "Koordinator pregleda",
+      "workplace_reviewer": "Stručnjak za pregled radnog okruženja"
     },
     "scope": {
       "platform": "Cela platforma",
