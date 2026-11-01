@@ -155,12 +155,15 @@ describe('templates', () => {
     expect([...byKey('approver').requiredConditionTypes]).toEqual(['spending_ceiling', 'categories']);
     expect([...byKey('employer_finance').requiredConditionTypes]).toEqual(['spending_ceiling']);
     expect([...byKey('event_supplier').requiredConditionTypes]).toEqual(['time_window']);
+    // The reviewer joins only workplace review meetings (ADR 0002, D-EL-11).
+    expect([...byKey('workplace_reviewer').requiredConditionTypes]).toEqual(['categories']);
+    expect(byKey('workplace_reviewer').defaultConditions).toEqual([{ type: 'categories', allowed: ['workplace_review'] }]);
   });
 
   it('templates without required conditions have an empty array', () => {
     const withRequired = new Set([
       'expert', 'team_manager', 'approver', 'employer_finance', 'event_supplier',
-      'content_reviewer', 'intake_professional', 'workplace_review_approver',
+      'content_reviewer', 'intake_professional', 'workplace_review_approver', 'workplace_reviewer',
     ]);
     for (const t of PERMISSION_TEMPLATES) {
       if (!withRequired.has(t.key)) {

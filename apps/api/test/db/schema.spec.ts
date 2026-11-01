@@ -90,8 +90,8 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    // 0000 through 0021 = 22 migrations (calls at 0007-0015, CMS at 0016, auth phase 4 at 0017-0020, listening at 0021)
-    expect(Number(rows[0]!.n)).toBe(22);
+    // 0000 through 0022 = 23 migrations (calls at 0007-0015, CMS at 0016, auth phase 4 at 0017-0020, listening at 0021, feedback cases at 0022)
+    expect(Number(rows[0]!.n)).toBe(23);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -316,9 +316,10 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
                            'webinar_polls','webinar_poll_options','webinar_poll_results','webinar_recordings',
                            'sso_domains','cases',
                            'listening_configurations','listening_policy_versions','survey_cycles','survey_participations',
-                           'survey_drafts','survey_responses','survey_snapshots','survey_aggregate_cells','survey_offer_dismissals')`,
+                           'survey_drafts','survey_responses','survey_snapshots','survey_aggregate_cells','survey_offer_dismissals',
+                           'feedback_routes','feedback_cases','feedback_case_reporters','feedback_messages')`,
       );
-      expect(rows).toHaveLength(44);
+      expect(rows).toHaveLength(48);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);

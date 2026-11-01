@@ -33,6 +33,8 @@ export const MAINTENANCE_SCHEDULES: Record<MaintenanceJobName, string> = {
   'emergency.sweep-expired': '*/15 * * * *',
   'sessions.reconcile-ttl': '45 2 * * *',
   'sso.certificate-expiry': '0 3 * * *',
+  // Overdue feedback cases move to the route's alternate once an hour (spec FBK-04).
+  'feedback.escalate-overdue': '30 * * * *',
 };
 
 @Injectable()

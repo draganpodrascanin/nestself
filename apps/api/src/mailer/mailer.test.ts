@@ -114,6 +114,16 @@ const samples: { [T in MailTemplateName]: MailTemplateData<T> } = {
     timeZone: 'Europe/Belgrade',
     surveyUrl: 'https://app.nestself.rs/survey',
   },
+  feedback_case_assigned: {
+    pseudonym: 'Reporter-AB2C',
+    dueAt: '2026-11-05T09:00:00.000Z',
+    timeZone: 'Europe/Belgrade',
+    caseUrl: 'https://app.nestself.rs/feedback/inbox/case_1',
+  },
+  feedback_case_update: {
+    pseudonym: 'Reporter-AB2C',
+    caseUrl: 'https://app.nestself.rs/feedback/cases/case_1',
+  },
 };
 
 /** The sender the tests render with: ORGANIZER of every calendar file. */
@@ -146,6 +156,8 @@ describe('mail templates', () => {
         'appointment.follow_up.proposed',
         'appointment.no_show_followup',
         'appointment.reminder',
+        'feedback_case_assigned',
+        'feedback_case_update',
         'invitation',
         'ops_certificate_alert',
         'sso_bind_code',

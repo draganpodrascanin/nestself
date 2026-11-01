@@ -151,6 +151,18 @@ export const AUDIT_ACTIONS = [
   'listening.report.read',
   'listening.export.generated',
   'listening.offer.dismissed',
+  // Organizational feedback cases (ADR 0002; spec FBK-01..06). Details carry
+  // ids, states, route kinds and field names: never a message body, an
+  // explanation or the reporter. Rows written on the reporter's behalf carry
+  // no actor (`actorUserId: null`, `actorKind: 'SYSTEM'`).
+  'feedback_route.changed',
+  'feedback_case.created',
+  'feedback_case.read',
+  'feedback_case.message_sent',
+  'feedback_case.reporter_replied',
+  'feedback_case.state_changed',
+  'feedback_case.reassigned',
+  'feedback_case.escalated',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -211,6 +223,9 @@ function resolveCategory(action: AuditAction): AuditCategory {
   // content access; configuration, questionnaire and cycle changes are admin.
   if (action === 'listening.report.read' || action === 'listening.export.generated') return 'CONTENT_ACCESS';
   if (action.startsWith('listening.')) return 'ADMIN';
+  // Feedback cases: a handler opening a case is content access; the rest is case administration.
+  if (action === 'feedback_case.read') return 'CONTENT_ACCESS';
+  if (action.startsWith('feedback_case.') || action.startsWith('feedback_route.')) return 'ADMIN';
   // Exhaustive fallback — should never be reached.
   return 'ADMIN';
 }

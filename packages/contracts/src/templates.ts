@@ -620,8 +620,10 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_cases',
-    defaultConditions: [],
-    requiredConditionTypes: [],
+    // The reviewer joins only the meetings of a workplace review (ADR 0002, D-EL-11 and D-EL-12):
+    // `consultation.join` never reaches a psychological, legal or financial consultation through this template.
+    defaultConditions: [{ type: 'categories', allowed: ['workplace_review'] }],
+    requiredConditionTypes: ['categories'],
     requiresSecondFactor: true,
     stepUpActions: [],
     isActive: true,

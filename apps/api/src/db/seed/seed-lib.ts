@@ -52,6 +52,8 @@ import { approvalHash } from '@nestself/content/schema';
 // pending item (SAMPLE_APPROVAL_AUTHORITIES, SAMPLE_APPROVAL_ITEMS, T-CW-1.5)
 // are seeded below.
 import {
+  DEFAULT_FEEDBACK_RESPONSE_TARGET_HOURS,
+  FEEDBACK_CATEGORIES,
   PERMISSION_TEMPLATES,
   type PermissionTemplateDefinition,
   type WebinarAudiencePolicy,
@@ -537,6 +539,28 @@ export async function seed(db: Database, options: SeedOptions = {}): Promise<Rec
         createdByUserId: listeningAdmin.id,
       })
       .onConflictDoNothing({ target: t.listeningPolicyVersions.id });
+  }
+
+  // ── Feedback routes (ADR 0002, spec FBK-01..03): the sample organization's
+  // standard route, Stefan primary and Ivana the independent alternate. The
+  // sensitive route is not configured: it needs a staffed process first (FBK-06).
+  {
+    const standardRoute = {
+      orgId: SAMPLE_ORG.id,
+      kind: 'standard' as const,
+      categories: [...FEEDBACK_CATEGORIES],
+      primaryHandlerUserId: 'user_stefan',
+      alternateHandlerUserId: 'user_ivana',
+      enabled: true,
+      operatingHours: null,
+      responseTargetHours: DEFAULT_FEEDBACK_RESPONSE_TARGET_HOURS,
+      escalationNote: null,
+      updatedByUserId: listeningAdmin?.id ?? null,
+    };
+    await db
+      .insert(t.feedbackRoutes)
+      .values({ id: `feedback_route_${SAMPLE_ORG.id}_standard`, ...standardRoute })
+      .onConflictDoUpdate({ target: t.feedbackRoutes.id, set: standardRoute });
   }
 
   // ── Retention policies (deterministic ids; unique keys match the ids) ──
@@ -1324,6 +1348,8 @@ export async function derivedGrantConditions(
   userId: string,
 ): Promise<unknown[] | null> {
   if (tmpl.key === 'workplace_review_approver') return [SAMPLE_REVIEW_APPROVER_CEILING];
+  // The reviewer's grant is limited to the workplace review category (ADR 0002, D-EL-11).
+  if (tmpl.key === 'workplace_reviewer') return [...tmpl.defaultConditions];
   if (tmpl.scopeType !== 'assigned_cases' || tmpl.key !== 'expert') return null;
   const expert = await db.query.experts.findFirst({
     where: eq(t.experts.userId, userId),
@@ -1394,6 +1420,8 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     questionnaireVersions: t.questionnaireVersions,
     listeningConfigurations: t.listeningConfigurations,
     surveyCycles: t.surveyCycles,
+    feedbackRoutes: t.feedbackRoutes,
+    feedbackCases: t.feedbackCases,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {

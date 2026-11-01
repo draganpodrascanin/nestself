@@ -12,6 +12,7 @@
  */
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
+import { FeedbackCasesModule } from '../feedback-cases/feedback-cases.module.js';
 import { IdentityModule } from '../identity/identity.module.js';
 import { SessionModule } from '../session/session.module.js';
 import { JobAuthorization } from './job-authorization.js';
@@ -19,7 +20,7 @@ import { MaintenanceJobsService } from './maintenance-jobs.service.js';
 import { JobSchedulerService } from './job-scheduler.service.js';
 
 @Module({
-  imports: [AuthModule, SessionModule, IdentityModule],
+  imports: [AuthModule, SessionModule, IdentityModule, FeedbackCasesModule],
   providers: [JobAuthorization, MaintenanceJobsService, JobSchedulerService],
   exports: [JobAuthorization, MaintenanceJobsService, JobSchedulerService],
 })

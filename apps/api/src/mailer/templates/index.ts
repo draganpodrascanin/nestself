@@ -11,6 +11,8 @@ import { type Locale } from '@nestself/contracts';
 import * as appointmentCanceled from './appointment-canceled.js';
 import * as appointmentNoShowFollowup from './appointment-no-show-followup.js';
 import * as appointmentReminder from './appointment-reminder.js';
+import * as feedbackCaseAssigned from './feedback-case-assigned.js';
+import * as feedbackCaseUpdate from './feedback-case-update.js';
 import * as approvalDecided from './approval-decided.js';
 import * as approvalReminder from './approval-reminder.js';
 import * as approvalRequested from './approval-requested.js';
@@ -50,6 +52,9 @@ export const mailTemplates = {
   // Employee listening (ADR 0002, spec EMP-03): the launch invitation and the reminder.
   survey_invitation: surveyInvitation,
   survey_reminder: surveyReminder,
+  // Feedback cases (spec FBK-02): neutral notices with an authenticated link, never case content.
+  feedback_case_assigned: feedbackCaseAssigned,
+  feedback_case_update: feedbackCaseUpdate,
 } as const;
 
 export type MailTemplateName = keyof typeof mailTemplates;

@@ -389,3 +389,22 @@ export const recordingStatus = pgEnum('recording_status', [
 
 /** Consent kinds of `call_consents`, schema only in this epic [D-CW-19, CW-R-79b]. */
 export const callConsentType = pgEnum('call_consent_type', ['RECORDING', 'TRANSCRIPTION']);
+
+/** Feedback route kinds (ADR 0002, spec FBK-06): the ordinary channel and the separately staffed sensitive one. */
+export const feedbackRouteKind = pgEnum('feedback_route_kind', ['standard', 'sensitive']);
+
+/** What an employee raises through the channel (spec FBK-01). */
+export const feedbackCaseKind = pgEnum('feedback_case_kind', ['problem', 'suggestion']);
+
+/** Case lifecycle (spec section 8, FBK-04): every open state has an owner and a next action. */
+export const feedbackCaseState = pgEnum('feedback_case_state', [
+  'submitted',
+  'in_review',
+  'waiting_for_reporter',
+  'action_in_progress',
+  'resolved',
+  'closed',
+]);
+
+/** Who wrote a case message: the reporter (never identified), a handler, or the system. */
+export const feedbackMessageSender = pgEnum('feedback_message_sender', ['reporter', 'handler', 'system']);

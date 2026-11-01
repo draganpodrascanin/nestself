@@ -44,6 +44,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
 import { SsoModule } from './sso/sso.module.js';
 import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
 import { ListeningModule } from './listening/listening.module.js';
+import { FeedbackCasesModule } from './feedback-cases/feedback-cases.module.js';
 
 @Module({
   imports: [
@@ -115,6 +116,7 @@ import { ListeningModule } from './listening/listening.module.js';
     CmsModule,
     LibraryModule,
     ListeningModule,
+    FeedbackCasesModule,
   ],
   providers: [
     { provide: APP_GUARD, useExisting: AuthenticationGuard },
