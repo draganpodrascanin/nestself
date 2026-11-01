@@ -181,7 +181,8 @@ export const SAMPLE_PRINCIPALS: Record<
   },
   manager: {
     principal: managerPrincipal,
-    effectiveActions: actionsForTemplates('employee', 'team_manager'),
+    // Stefan is also the organization's primary feedback handler (ADR 0002).
+    effectiveActions: actionsForTemplates('employee', 'team_manager', 'feedback_handler'),
     availableContexts: ORG_ADMIN_CONTEXTS,
   },
   hr_admin: {
@@ -191,17 +192,24 @@ export const SAMPLE_PRINCIPALS: Record<
     // management screen is reachable in sample mode, and the approver
     // template (`grant_user_ivana_approver`), so `/approvals` lists
     // SAMPLE_APPROVAL_ITEMS (T-CW-1.5).
-    effectiveActions: actionsForTemplates('employee', 'hr_admin', 'employer_owner', 'approver'),
+    // Employee listening (ADR 0002): she administers surveys, requests and
+    // approves workplace reviews and is the alternate feedback handler.
+    effectiveActions: actionsForTemplates(
+      'employee', 'hr_admin', 'employer_owner', 'approver',
+      'survey_administrator', 'workplace_review_requester', 'workplace_review_approver', 'feedback_handler',
+    ),
     availableContexts: ORG_ADMIN_CONTEXTS,
   },
   expert: {
     principal: expertPrincipal,
-    effectiveActions: actionsForTemplates('expert'),
+    // Milica is also a qualified workplace reviewer (ADR 0002, D-EL-11).
+    effectiveActions: actionsForTemplates('expert', 'workplace_reviewer'),
     availableContexts: [{ kind: 'expert' }],
   },
   operations: {
     principal: operationsPrincipal,
-    effectiveActions: actionsForTemplates('client_operations', 'support_operator'),
+    // Nikola coordinates workplace reviews and administers listening (ADR 0002).
+    effectiveActions: actionsForTemplates('client_operations', 'support_operator', 'review_coordinator', 'listening_administrator'),
     availableContexts: [{ kind: 'operations' }],
   },
   admin: {
@@ -211,7 +219,7 @@ export const SAMPLE_PRINCIPALS: Record<
     effectiveActions: actionsForTemplates(
       'platform_owner',
       'content_author', 'content_reviewer', 'content_publisher',
-      'editorial_lead',
+      'editorial_lead', 'listening_administrator', 'review_coordinator',
     ),
     availableContexts: [{ kind: 'operations' }],
   },

@@ -139,6 +139,17 @@ describe('STEP_UP_CLASS_BY_ACTION', () => {
     expect(STEP_UP_CLASS_BY_ACTION['session.revoke.any']).toBe('administration');
   });
 
+  it('covers the employee listening actions (ADR 0002)', () => {
+    expect(STEP_UP_CLASS_BY_ACTION['listening.configure']).toBe('administration');
+    expect(STEP_UP_CLASS_BY_ACTION['listening.templates.publish']).toBe('administration');
+    expect(STEP_UP_CLASS_BY_ACTION['listening.reports.export']).toBe('export');
+    expect(STEP_UP_CLASS_BY_ACTION['feedback_case.handle']).toBe('restricted');
+    expect(STEP_UP_CLASS_BY_ACTION['feedback_case.assign']).toBe('restricted');
+    expect(STEP_UP_CLASS_BY_ACTION['workplace_reviews.scope.accept']).toBe('financial');
+    expect(STEP_UP_CLASS_BY_ACTION['listening.reports.read']).toBeUndefined();
+    expect(STEP_UP_CLASS_BY_ACTION['listening.respond.self']).toBeUndefined();
+  });
+
   it('covers the documented restricted actions', () => {
     expect(STEP_UP_CLASS_BY_ACTION['conversation.read.assigned']).toBe('restricted');
     expect(STEP_UP_CLASS_BY_ACTION['notes.read.supervision']).toBe('restricted');

@@ -268,6 +268,16 @@ export const STEP_UP_CLASS_BY_ACTION: Partial<Record<Action, StepUpClass>> = {
   // emergency
   'access.emergency.request': 'emergency',
   'access.emergency.approve': 'emergency',
+
+  // Employee listening (ADR 0002): configuration and publication are
+  // administration, the aggregate export is an export, reading or assigning a
+  // feedback case is restricted content, accepting a scope commits money.
+  'listening.configure': 'administration',
+  'listening.templates.publish': 'administration',
+  'listening.reports.export': 'export',
+  'feedback_case.handle': 'restricted',
+  'feedback_case.assign': 'restricted',
+  'workplace_reviews.scope.accept': 'financial',
 } as const;
 
 // Re-export Action from actions.ts so all authorization types

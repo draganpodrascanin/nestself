@@ -17,6 +17,8 @@ import { LibraryContentListSchema, can } from '@nestself/contracts';
 import { libraryKeys } from '@nestself/api-client';
 import { useAuth } from '../../auth';
 import { NextAppointment } from '../../calls/next-appointment';
+import { listeningApi } from '../../features/listening/listening-api';
+import { SurveyHomeCard } from '../../features/listening/survey-home-card';
 import { isSampleDataMode } from '../../data-source';
 import { api } from '../../api';
 import { sampleContentCards } from '../../library/sample-library-data';
@@ -95,6 +97,17 @@ function UpcomingAppointmentSection() {
   );
 }
 
+/** The open survey's entry card (spec EMP-01): for holders of `listening.respond.self`. */
+function SurveySection() {
+  const { principal, effectiveActions } = useAuth();
+  const show = isSampleDataMode || (principal ? can(principal, 'listening.respond.self', undefined, effectiveActions) : false);
+  if (!show) return null;
+  const ctx = principal?.context;
+  const orgId = ctx && 'orgId' in ctx ? (ctx.orgId ?? null) : null;
+  const organizationName = principal?.memberships.find((m) => m.orgId === orgId)?.orgName ?? principal?.memberships[0]?.orgName ?? null;
+  return <SurveyHomeCard listeningApi={listeningApi} sampleMode={isSampleDataMode} organizationName={organizationName} />;
+}
+
 // No per-route SampleDataBanner — root __root.tsx renders it (Minor: duplicate banner)
 
 function SampleHomePage({ locale, denied }: { locale: string; denied?: string }) {
@@ -116,6 +129,7 @@ function SampleHomePage({ locale, denied }: { locale: string; denied?: string })
         {t('library:home.greeting', { name: principal?.displayName ?? '' })}
       </Heading>
 
+      <SurveySection />
       <UpcomingAppointmentSection />
 
       <section>
@@ -227,6 +241,7 @@ function ApiHomePage({ locale, denied }: { locale: string; denied?: string }) {
         {t('library:home.greeting', { name: principal?.displayName ?? '' })}
       </Heading>
 
+      <SurveySection />
       <UpcomingAppointmentSection />
 
       {isError ? (

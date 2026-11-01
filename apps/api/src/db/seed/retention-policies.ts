@@ -101,4 +101,20 @@ export const RETENTION_POLICIES: readonly RetentionPolicyRow[] = [
   row('webinar_polls', 1 * YEAR, 1 * YEAR),
   row('webinar_poll_options', 1 * YEAR, 1 * YEAR),
   row('webinar_poll_results', 1 * YEAR, 1 * YEAR),
+  // Employee listening (ADR 0002; spec PRI-05): one class per kind of record,
+  // never one blanket policy. Defaults pending the DPIA and counsel.
+  // Private drafts: purged 30 days after the cycle closes (SECURITY tier).
+  row('survey_drafts', 30, 30),
+  // The participation link (eligibility, reminders, receipt): 1 year after publication.
+  row('survey_participation_links', 1 * YEAR, 1 * YEAR),
+  // Raw answers with no identity column: 3 years, for corrections and re-releases.
+  row('survey_responses', 3 * YEAR, 3 * YEAR),
+  // Published aggregate snapshots: 10 years (the employer's reporting history).
+  row('survey_snapshots', 10 * YEAR, 10 * YEAR),
+  // Feedback cases and their messages: 5 years after closure.
+  row('feedback_cases', 5 * YEAR, 5 * YEAR),
+  // Workplace review documents (reports, packs, notes): 10 years.
+  row('review_documents', 10 * YEAR, 10 * YEAR),
+  // Scope acceptances and other financial references: 10 years (FINANCIAL tier).
+  row('review_financial_references', 10 * YEAR, 10 * YEAR),
 ];

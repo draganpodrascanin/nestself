@@ -1,0 +1,125 @@
+/**
+ * The translated labels of `ContentEditor` (slash menu, bubble menu, block
+ * handle and node views), shared by the CMS variant editor and the workplace
+ * review report editor so that both read the same `cms:editor.*` copy.
+ */
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { ContentEditorLabels } from '@nestself/content/editor';
+
+export function useEditorLabels(): ContentEditorLabels {
+  const { t } = useTranslation(['cms', 'common']);
+  return useMemo<ContentEditorLabels>(
+    () => ({
+      editorLabel: t('cms:editor.toolbar.toolbar', { defaultValue: 'Content editor' }),
+      slashMenu: {
+        placeholder: t('cms:editor.slash.placeholder', { defaultValue: 'Filter blocks...' }),
+        empty: t('cms:editor.slash.empty', { defaultValue: 'No matching blocks' }),
+        groupText: t('cms:editor.slash.groupText', { defaultValue: 'Text' }),
+        groupLists: t('cms:editor.slash.groupLists', { defaultValue: 'Lists' }),
+        groupBlocks: t('cms:editor.slash.groupBlocks', { defaultValue: 'Blocks' }),
+        groupMedia: t('cms:editor.slash.groupMedia', { defaultValue: 'Media' }),
+      },
+      slashItems: {
+        paragraph: t('cms:editor.slash.paragraph', { defaultValue: 'Paragraph' }),
+        paragraphHint: t('cms:editor.slash.paragraphHint', { defaultValue: 'Plain text' }),
+        heading2: t('cms:editor.toolbar.heading', { defaultValue: 'Heading 2' }),
+        heading2Hint: t('cms:editor.slash.heading2Hint', { defaultValue: 'Section heading' }),
+        heading3: t('cms:editor.toolbar.heading3', { defaultValue: 'Heading 3' }),
+        heading3Hint: t('cms:editor.slash.heading3Hint', { defaultValue: 'Subsection' }),
+        bulletList: t('cms:editor.toolbar.bulletList'),
+        bulletListHint: t('cms:editor.slash.bulletListHint', { defaultValue: 'Unordered list' }),
+        numberedList: t('cms:editor.toolbar.orderedList'),
+        numberedListHint: t('cms:editor.slash.numberedListHint', { defaultValue: 'Ordered list' }),
+        checklist: t('cms:editor.toolbar.checklist', { defaultValue: 'Checklist' }),
+        checklistHint: t('cms:editor.slash.checklistHint', { defaultValue: 'Checkable items' }),
+        quote: t('cms:editor.toolbar.quote'),
+        quoteHint: t('cms:editor.slash.quoteHint', { defaultValue: 'Blockquote' }),
+        note: t('cms:editor.toolbar.note', { defaultValue: 'Professional note' }),
+        noteHint: t('cms:editor.slash.noteHint', { defaultValue: 'Tip, warning or info' }),
+        step: t('cms:editor.toolbar.step', { defaultValue: 'Practical step' }),
+        stepHint: t('cms:editor.slash.stepHint', { defaultValue: 'Numbered instruction' }),
+        cta: t('cms:editor.toolbar.cta', { defaultValue: 'Call to action' }),
+        ctaHint: t('cms:editor.slash.ctaHint', { defaultValue: 'Action button' }),
+        related: t('cms:editor.toolbar.related', { defaultValue: 'Related resource' }),
+        relatedHint: t('cms:editor.slash.relatedHint', { defaultValue: 'Link to another article' }),
+        image: t('cms:editor.toolbar.image'),
+        imageHint: t('cms:editor.slash.imageHint', { defaultValue: 'Upload or paste' }),
+      },
+      bubbleMenu: {
+        format: t('cms:editor.bubble.format'),
+        bold: t('cms:editor.toolbar.bold'),
+        link: t('cms:editor.toolbar.link'),
+        linkUrl: t('cms:editor.toolbar.linkUrl'),
+        linkInsert: t('cms:editor.toolbar.linkInsert'),
+        linkRemove: t('cms:editor.toolbar.linkRemove'),
+        linkInvalid: t('cms:editor.toolbar.linkInvalid', {
+          defaultValue: 'Only https:// links and internal references are allowed.',
+        }),
+        turnInto: t('cms:editor.bubble.turnInto', { defaultValue: 'Turn into' }),
+        paragraph: t('cms:editor.slash.paragraph', { defaultValue: 'Paragraph' }),
+        heading2: t('cms:editor.toolbar.heading', { defaultValue: 'Heading 2' }),
+        heading3: t('cms:editor.toolbar.heading3', { defaultValue: 'Heading 3' }),
+        quote: t('cms:editor.toolbar.quote'),
+      },
+      blockHandle: {
+        addBlock: t('cms:editor.block.add', { defaultValue: 'Add block' }),
+        dragBlock: t('cms:editor.block.drag', { defaultValue: 'Drag or open menu' }),
+        turnInto: t('cms:editor.bubble.turnInto', { defaultValue: 'Turn into' }),
+        duplicate: t('cms:editor.block.duplicate', { defaultValue: 'Duplicate' }),
+        delete: t('cms:editor.block.delete', { defaultValue: 'Delete' }),
+        moveUp: t('cms:editor.block.moveUp', { defaultValue: 'Move up' }),
+        moveDown: t('cms:editor.block.moveDown', { defaultValue: 'Move down' }),
+        paragraph: t('cms:editor.slash.paragraph', { defaultValue: 'Paragraph' }),
+        heading2: t('cms:editor.toolbar.heading', { defaultValue: 'Heading 2' }),
+        heading3: t('cms:editor.toolbar.heading3', { defaultValue: 'Heading 3' }),
+        quote: t('cms:editor.toolbar.quote'),
+      },
+      nodeView: {
+        noteType: t('cms:editor.nodeView.noteType'),
+        noteKinds: {
+          tip: t('cms:editor.nodeView.noteKindTip'),
+          warning: t('cms:editor.nodeView.noteKindWarning'),
+          disclaimer: t('cms:editor.nodeView.noteKindDisclaimer'),
+        },
+        stepTitle: t('cms:editor.nodeView.stepTitle'),
+        checklistLabel: '',
+        ctaDialog: t('cms:editor.toolbar.cta'),
+        ctaAction: t('cms:editor.nodeView.ctaAction'),
+        ctaKinds: {
+          suggest_topic: t('cms:editor.nodeView.ctaKindSuggestTopic'),
+          open_content: t('cms:editor.nodeView.ctaKindOpenContent'),
+          open_collection: t('cms:editor.nodeView.ctaKindOpenCollection'),
+          open_service: t('cms:editor.nodeView.ctaKindOpenService'),
+        },
+        ctaContent: t('cms:editor.nodeView.ctaContent'),
+        ctaCollection: t('cms:editor.nodeView.ctaCollection'),
+        ctaService: t('cms:editor.nodeView.ctaService'),
+        ctaServices: {
+          library: t('cms:editor.nodeView.serviceLibrary'),
+          general_questions: t('cms:editor.nodeView.serviceGeneralQuestions'),
+          event_interest: t('cms:editor.nodeView.serviceEventInterest'),
+        },
+        ctaButtonLabel: t('cms:editor.nodeView.ctaButtonLabel'),
+        ctaButtonLabelHint: t('cms:editor.nodeView.ctaButtonLabelHint'),
+        ctaTargetRequired: t('cms:editor.nodeView.ctaTargetRequired'),
+        relatedDialog: t('cms:editor.toolbar.related'),
+        relatedChoose: t('cms:editor.nodeView.relatedChoose'),
+        searchPlaceholder: t('cms:editor.nodeView.searchPlaceholder'),
+        searching: t('cms:editor.nodeView.searching'),
+        searchEmpty: t('cms:editor.nodeView.searchEmpty'),
+        searchError: t('cms:editor.nodeView.searchError'),
+        done: t('cms:editor.nodeView.done'),
+        cancel: t('common:action.cancel'),
+        close: t('common:nav.close'),
+        imageAlt: t('cms:editor.image.altText'),
+        imageCaption: t('cms:editor.nodeView.imageCaptionLabel'),
+        imagePlaceholder: t('cms:editor.nodeView.imagePlaceholder'),
+        imageUploading: t('cms:editor.image.uploading'),
+        imageProcessing: t('cms:editor.image.processing'),
+        imageUploadFailed: t('cms:editor.image.uploadFailed'),
+      },
+    }),
+    [t],
+  );
+}

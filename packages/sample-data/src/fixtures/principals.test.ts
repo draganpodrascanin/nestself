@@ -17,6 +17,21 @@ describe('SAMPLE_PRINCIPALS', () => {
     expect(new Set(actions).size).toBe(actions.length);
   });
 
+  it('gives the listening roles of ADR 0002 to the right personas', () => {
+    expect(SAMPLE_PRINCIPALS.hr_admin.effectiveActions).toEqual(
+      expect.arrayContaining(['listening.cycles.manage', 'listening.reports.read', 'workplace_reviews.request', 'workplace_reviews.scope.accept', 'feedback_case.handle']),
+    );
+    expect(SAMPLE_PRINCIPALS.manager.effectiveActions).toContain('feedback_case.handle');
+    expect(SAMPLE_PRINCIPALS.expert.effectiveActions).toContain('workplace_reviews.report.write');
+    expect(SAMPLE_PRINCIPALS.operations.effectiveActions).toEqual(
+      expect.arrayContaining(['workplace_reviews.coordinate', 'listening.configure', 'listening.templates.publish']),
+    );
+    const employee = SAMPLE_PRINCIPALS.employee.effectiveActions;
+    expect(employee).toEqual(expect.arrayContaining(['listening.respond.self', 'feedback_case.create.self']));
+    expect(employee).not.toContain('listening.reports.read');
+    expect(employee).not.toContain('feedback_case.handle');
+  });
+
   it('does not give the employee persona any access-management action', () => {
     const actions = SAMPLE_PRINCIPALS.employee.effectiveActions;
     expect(actions.some((a) => a.startsWith('access.'))).toBe(false);

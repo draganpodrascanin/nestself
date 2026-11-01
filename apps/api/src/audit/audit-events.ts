@@ -133,6 +133,61 @@ export const AUDIT_ACTIONS = [
   'webinar.recording.failed',
   'webinar.attendance.viewed',
   'webinar.certificate.issued',
+  // Employee listening (ADR 0002; spec CFG-01, CFG-03, SUR-01..04, REP, REV-01).
+  // Details carry ids, versions, counts and field names: never an answer, a
+  // participant or a score of a hidden cell.
+  'listening.configuration.changed',
+  'listening.questionnaire.created',
+  'listening.questionnaire.updated',
+  'listening.questionnaire.submitted',
+  'listening.questionnaire.published',
+  'listening.questionnaire.archived',
+  'listening.cycle.scheduled',
+  'listening.cycle.launched',
+  'listening.cycle.canceled',
+  'listening.cycle.finalized',
+  'listening.cycle.failed',
+  'listening.reminders.sent',
+  'listening.report.read',
+  'listening.export.generated',
+  'listening.offer.dismissed',
+  // Organizational feedback cases (ADR 0002; spec FBK-01..06). Details carry
+  // ids, states, route kinds and field names: never a message body, an
+  // explanation or the reporter. Rows written on the reporter's behalf carry
+  // no actor (`actorUserId: null`, `actorKind: 'SYSTEM'`).
+  'feedback_route.changed',
+  'feedback_case.created',
+  'feedback_case.read',
+  'feedback_case.message_sent',
+  'feedback_case.reporter_replied',
+  'feedback_case.state_changed',
+  'feedback_case.reassigned',
+  'feedback_case.escalated',
+  // Workplace reviews (ADR 0002; spec Epics G and H). Details carry ids,
+  // versions, statuses and amounts: never a report body, a note or a score.
+  'workplace_review.requested',
+  'workplace_review.triaged',
+  'workplace_review.declined',
+  'workplace_review.request_canceled',
+  'workplace_review.scope_sent',
+  'workplace_review.scope_accepted',
+  'workplace_review.scope_rejected',
+  'workplace_review.engagement_created',
+  'workplace_review.reviewer_assigned',
+  'workplace_review.windows_proposed',
+  'workplace_review.appointment_booked',
+  'workplace_review.canceled',
+  'workplace_review.sharing_granted',
+  'workplace_review.sharing_revoked',
+  'workplace_review.pack_read',
+  'workplace_review.report_saved',
+  'workplace_review.report_shared',
+  'workplace_review.report_read',
+  'workplace_review.action_created',
+  'workplace_review.action_updated',
+  'workplace_review.follow_up_planned',
+  'workplace_review.completed',
+  'workplace_review.note_added',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -189,6 +244,17 @@ function resolveCategory(action: AuditAction): AuditCategory {
     return 'CONTENT_ACCESS';
   }
   if (action.startsWith('webinar.')) return 'ADMIN';
+  // Employee listening (ADR 0002): reads of protected reports and exports are
+  // content access; configuration, questionnaire and cycle changes are admin.
+  if (action === 'listening.report.read' || action === 'listening.export.generated') return 'CONTENT_ACCESS';
+  if (action.startsWith('listening.')) return 'ADMIN';
+  // Feedback cases: a handler opening a case is content access; the rest is case administration.
+  if (action === 'feedback_case.read') return 'CONTENT_ACCESS';
+  if (action.startsWith('feedback_case.') || action.startsWith('feedback_route.')) return 'ADMIN';
+  // Workplace reviews: accepting a scope is a financial decision; reading a pack or a report is content access.
+  if (action === 'workplace_review.scope_accepted') return 'FINANCIAL';
+  if (action === 'workplace_review.pack_read' || action === 'workplace_review.report_read') return 'CONTENT_ACCESS';
+  if (action.startsWith('workplace_review.')) return 'ADMIN';
   // Exhaustive fallback — should never be reached.
   return 'ADMIN';
 }

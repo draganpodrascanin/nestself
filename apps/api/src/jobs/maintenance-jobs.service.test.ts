@@ -115,6 +115,7 @@ describe('MaintenanceJobsService', () => {
       fetcher,
       mailer,
       { get: (key: string) => env[key] } as never,
+      { escalateOverdue: async () => ({ escalated: 0, failed: 0 }) } as never,
     );
   });
 

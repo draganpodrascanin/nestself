@@ -1,8 +1,9 @@
 /**
  * Permission template keys and definitions.
  *
- * The 21 templates bridge the product persona model and the grant-based
- * authorization engine. Each template seeds one or more Grant rows.
+ * The 28 templates bridge the product persona model and the grant-based
+ * authorization engine (21 of the auth strategy, 7 of the employee listening
+ * module, ADR 0002). Each template seeds one or more Grant rows.
  * [D-17, 4.4]
  *
  * @see Section 4.4 of auth-strategy.md
@@ -36,6 +37,14 @@ export const TEMPLATE_KEYS = [
   'reporting_user',
   'employee',
   'event_supplier',
+  // Employee listening (ADR 0002)
+  'survey_administrator',
+  'feedback_handler',
+  'workplace_review_requester',
+  'workplace_review_approver',
+  'listening_administrator',
+  'review_coordinator',
+  'workplace_reviewer',
 ] as const;
 
 /**
@@ -104,6 +113,8 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'policy.manage', 'service.enable', 'audit.read', 'platform.configure',
       'sso.manage', 'session.revoke.any', 'people.deactivate',
       'event.manage', 'event.moderate',
+      'listening.configure', 'listening.templates.write', 'listening.templates.publish',
+      'workplace_reviews.coordinate',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'platform',
@@ -113,7 +124,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     stepUpActions: [
       'access.grant', 'access.revoke', 'access.emergency.request',
       'access.emergency.approve', 'sso.manage', 'session.revoke.any',
-      'people.deactivate',
+      'people.deactivate', 'listening.configure', 'listening.templates.publish',
     ],
     isActive: true,
     legacyRole: 'ADMIN',
@@ -127,6 +138,8 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'client.configure', 'people.import', 'people.onboard', 'people.deactivate',
       'service.configure', 'request.view', 'request.route', 'bookings.coordinate',
       'event.manage', 'event.moderate',
+      // Listening entitlements of an assigned client (spec CFG-01).
+      'listening.configure',
       'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
     scopeType: 'assigned_clients',
@@ -135,7 +148,7 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     requiresSecondFactor: true,
     // Offboarding on behalf of an assigned client (API-R-27 suspension and
     // membership end). Step-up class "administration" (3.6.9).
-    stepUpActions: ['people.deactivate'],
+    stepUpActions: ['people.deactivate', 'listening.configure'],
     isActive: true,
     legacyRole: 'OPERATIONS',
   },
@@ -432,12 +445,13 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     name: 'Reporting User',
     workspace: 'organization',
     population: 'employer_admin',
-    actions: ['reports.aggregate.read', 'report.export'],
+    // Listening reports and their export (spec REP-01..04) next to the programme aggregates.
+    actions: ['reports.aggregate.read', 'report.export', 'listening.reports.read', 'listening.reports.export'],
     scopeType: 'org_unit',
     defaultConditions: [],
     requiredConditionTypes: [],
     requiresSecondFactor: true,
-    stepUpActions: ['report.export'],
+    stepUpActions: ['report.export', 'listening.reports.export'],
     isActive: true,
     legacyRole: null,
   },
@@ -451,6 +465,9 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
       'appointment.cancel', 'appointment.reschedule', 'event.register',
       'consultation.join', 'conversation.participate',
       'poll.respond', 'editorial.request.submit',
+      // Employee listening: answer the survey, raise and follow own feedback cases (ADR 0002).
+      'listening.respond.self',
+      'feedback_case.create.self', 'feedback_case.read.self', 'feedback_case.reply.self',
       'preferences.manage', 'voucher.activate',
       'feedback.submit', 'data.export.own', 'data.erasure.request',
     ],
@@ -472,6 +489,142 @@ export const PERMISSION_TEMPLATES: readonly PermissionTemplateDefinition[] = [
     defaultConditions: [],
     requiredConditionTypes: ['time_window'],
     requiresSecondFactor: false,
+    stepUpActions: [],
+    isActive: true,
+    legacyRole: null,
+  },
+
+  // ── Employee listening (ADR 0002; spec section 3) ──────────────────────
+  {
+    // Schedules and cancels survey cycles and reads the aggregate reports;
+    // never a participation list (spec CFG-02, SUR-02).
+    key: 'survey_administrator',
+    name: 'Survey Administrator',
+    workspace: 'organization',
+    population: 'employer_admin',
+    actions: [
+      'listening.cycles.manage', 'listening.reports.read',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'organization',
+    defaultConditions: [],
+    requiredConditionTypes: [],
+    requiresSecondFactor: true,
+    stepUpActions: [],
+    isActive: true,
+    legacyRole: null,
+  },
+  {
+    // Reads and answers the feedback cases assigned to them; the reporter's
+    // identity is never in reach (spec FBK-02..04, D-EL-01).
+    key: 'feedback_handler',
+    name: 'Feedback Handler',
+    workspace: 'organization',
+    population: 'employer_admin',
+    actions: [
+      'feedback_case.handle', 'feedback_case.assign',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'assigned_cases',
+    defaultConditions: [],
+    requiredConditionTypes: [],
+    requiresSecondFactor: true,
+    stepUpActions: ['feedback_case.handle', 'feedback_case.assign'],
+    isActive: true,
+    legacyRole: null,
+  },
+  {
+    // Requests a workplace review, follows the engagement and agrees actions;
+    // no spending authority (spec REV-02, REV-08).
+    key: 'workplace_review_requester',
+    name: 'Workplace Review Requester',
+    workspace: 'organization',
+    population: 'employer_admin',
+    actions: [
+      'workplace_reviews.request', 'workplace_reviews.engagement.read',
+      'workplace_reviews.actions.manage', 'listening.reports.read',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'organization',
+    defaultConditions: [],
+    requiredConditionTypes: [],
+    requiresSecondFactor: true,
+    stepUpActions: [],
+    isActive: true,
+    legacyRole: null,
+  },
+  {
+    // Accepts a defined scope and price within a spending ceiling (spec REV-05).
+    key: 'workplace_review_approver',
+    name: 'Workplace Review Approver',
+    workspace: 'organization',
+    population: 'employer_admin',
+    actions: [
+      'workplace_reviews.scope.accept',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'organization',
+    defaultConditions: [],
+    requiredConditionTypes: ['spending_ceiling'],
+    requiresSecondFactor: true,
+    stepUpActions: ['workplace_reviews.scope.accept'],
+    isActive: true,
+    legacyRole: null,
+  },
+  {
+    // Maintains questionnaire versions and client listening configuration (spec CFG-01, CFG-03, SUR-01).
+    key: 'listening_administrator',
+    name: 'Listening Administrator',
+    workspace: 'operations',
+    population: 'staff',
+    actions: [
+      'listening.configure', 'listening.templates.write', 'listening.templates.publish',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'platform',
+    defaultConditions: [],
+    requiredConditionTypes: [],
+    requiresSecondFactor: true,
+    stepUpActions: ['listening.configure', 'listening.templates.publish'],
+    isActive: true,
+    legacyRole: null,
+  },
+  {
+    // Triages review requests, sends scopes, assigns reviewers and proposes times (spec REV-03).
+    key: 'review_coordinator',
+    name: 'Review Coordinator',
+    workspace: 'operations',
+    population: 'staff',
+    actions: [
+      'workplace_reviews.coordinate',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'platform',
+    defaultConditions: [],
+    requiredConditionTypes: [],
+    requiresSecondFactor: true,
+    stepUpActions: [],
+    isActive: true,
+    legacyRole: null,
+  },
+  {
+    // The assigned professional: reads the approved pack, writes and shares the
+    // report, joins the review meeting (spec REV-04, REV-07; D-EL-11).
+    key: 'workplace_reviewer',
+    name: 'Workplace Reviewer',
+    workspace: 'expert',
+    population: 'expert',
+    actions: [
+      'workplace_reviews.engagement.read', 'workplace_reviews.report.write',
+      'workplace_reviews.report.publish', 'consultation.join', 'delivery.record',
+      'preferences.manage', 'feedback.submit', 'data.export.own', 'data.erasure.request',
+    ],
+    scopeType: 'assigned_cases',
+    // The reviewer joins only the meetings of a workplace review (ADR 0002, D-EL-11 and D-EL-12):
+    // `consultation.join` never reaches a psychological, legal or financial consultation through this template.
+    defaultConditions: [{ type: 'categories', allowed: ['workplace_review'] }],
+    requiredConditionTypes: ['categories'],
+    requiresSecondFactor: true,
     stepUpActions: [],
     isActive: true,
     legacyRole: null,

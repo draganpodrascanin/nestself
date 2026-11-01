@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Web parity check. The workspace and admin apps keep byte-identical copies of
- * a few auth files, because a ruling kept them app-local (a shared package
+ * a few auth and listening files, because a ruling kept them app-local (a shared package
  * would need an install). This script compares each pair byte for byte and
  * fails (exit 1) naming both paths of every pair that drifted: change both.
  *
@@ -13,6 +13,9 @@
  *   apps/workspace/src/features/access/use-debounced.ts   apps/admin/src/use-debounced.ts
  *   apps/workspace/src/auth/with-step-up.ts              apps/admin/src/auth/with-step-up.ts
  *   apps/workspace/src/query-retry.ts                     apps/admin/src/query-retry.ts
+ *   apps/workspace/src/features/listening/listening-errors.ts  apps/admin/src/features/listening/listening-errors.ts
+ *   apps/workspace/src/features/listening/score-tone.ts   apps/admin/src/features/reviews/score-tone.ts
+ *   apps/workspace/src/features/reviews/review-labels.ts  apps/admin/src/features/reviews/review-labels.ts
  *
  * Run by `pnpm check` as the turbo task `@nestself/workspace#check`, whose
  * inputs include `apps/admin/src` (turbo.json), so a change to an admin copy
@@ -33,6 +36,9 @@ const PAIRS = [
   ['apps/workspace/src/features/access/use-debounced.ts', 'apps/admin/src/use-debounced.ts'],
   ['apps/workspace/src/auth/with-step-up.ts', 'apps/admin/src/auth/with-step-up.ts'],
   ['apps/workspace/src/query-retry.ts', 'apps/admin/src/query-retry.ts'],
+  ['apps/workspace/src/features/listening/listening-errors.ts', 'apps/admin/src/features/listening/listening-errors.ts'],
+  ['apps/workspace/src/features/listening/score-tone.ts', 'apps/admin/src/features/reviews/score-tone.ts'],
+  ['apps/workspace/src/features/reviews/review-labels.ts', 'apps/admin/src/features/reviews/review-labels.ts'],
 ];
 
 /** The file's bytes, or null when it does not exist. */

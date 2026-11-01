@@ -182,7 +182,14 @@
       "reporting_user": "Riportfelhasználó",
       "employee": "Munkavállaló",
       "event_supplier": "Rendezvénybeszállító",
-      "delegated": "Delegált hozzáférés"
+      "delegated": "Delegált hozzáférés",
+      "survey_administrator": "Felmérés-adminisztrátor",
+      "feedback_handler": "Visszajelzés-kezelő",
+      "workplace_review_requester": "Munkahelyi átvilágítás igénylője",
+      "workplace_review_approver": "Munkahelyi átvilágítás jóváhagyója",
+      "listening_administrator": "Figyelés-adminisztrátor",
+      "review_coordinator": "Átvilágítás-koordinátor",
+      "workplace_reviewer": "Munkahelyi átvilágító"
     },
     "scope": {
       "platform": "Teljes platform",

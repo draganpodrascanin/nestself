@@ -52,6 +52,8 @@ import { approvalHash } from '@nestself/content/schema';
 // pending item (SAMPLE_APPROVAL_AUTHORITIES, SAMPLE_APPROVAL_ITEMS, T-CW-1.5)
 // are seeded below.
 import {
+  DEFAULT_FEEDBACK_RESPONSE_TARGET_HOURS,
+  FEEDBACK_CATEGORIES,
   PERMISSION_TEMPLATES,
   type PermissionTemplateDefinition,
   type WebinarAudiencePolicy,
@@ -72,6 +74,11 @@ import {
   toDbSessionStatus,
 } from '../../calls/call-mapper.js';
 import { RETENTION_POLICIES } from './retention-policies.js';
+import {
+  PILOT_PRIVACY_NOTICE,
+  PILOT_QUESTIONNAIRE_DIMENSIONS,
+  SAMPLE_QUESTIONNAIRE_V1_ID,
+} from '../../listening/listening-defaults.js';
 import { buildClosureRows } from '../../org-units/closure.js';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { Database } from '../db.service.js';
@@ -104,8 +111,76 @@ async function upsertById<TTable extends TableWithId>(
  */
 export const EXTRA_SAMPLE_TEMPLATES: Readonly<Record<string, readonly string[]>> = {
   // The approver template makes her the sample follow-up approver (T-CW-1.5).
-  user_ivana: ['employer_owner', 'approver'],
+  // Employee listening (ADR 0002): she administers surveys, requests and
+  // approves workplace reviews and is the alternate feedback handler.
+  user_ivana: [
+    'employer_owner',
+    'approver',
+    'survey_administrator',
+    'workplace_review_requester',
+    'workplace_review_approver',
+    'feedback_handler',
+  ],
+  // The primary feedback handler of the sample organization.
+  user_stefan: ['feedback_handler'],
+  // The qualified workplace reviewer (with the `workplace_review` credential).
+  user_milica: ['workplace_reviewer'],
+  // Coordinates workplace reviews and administers listening configuration.
+  user_nikola: ['review_coordinator', 'listening_administrator'],
 };
+
+/** The review service catalogue the seed installs (ids are stable so the sample fixtures can name them). */
+export const REVIEW_SERVICE_SEED = [
+  {
+    id: 'review_service_workplace_review',
+    key: 'workplace_review',
+    name: { en: 'Workplace review', 'sr-Latn': 'Pregled radnog okruženja', 'sr-Cyrl': 'Преглед радног окружења', hu: 'Munkahelyi átvilágítás' },
+    description: {
+      en: 'A qualified reviewer assesses the shared results with you and writes a report with findings and practical proposals. Scoped and priced per request.',
+      'sr-Latn': 'Kvalifikovani stručnjak sa vama procenjuje podeljene rezultate i piše izveštaj sa nalazima i praktičnim predlozima. Obim i cena se određuju po zahtevu.',
+      'sr-Cyrl': 'Квалификовани стручњак са вама процењује подељене резултате и пише извештај са налазима и практичним предлозима. Обим и цена се одређују по захтеву.',
+      hu: 'Egy képzett átvilágító Önnel együtt értékeli a megosztott eredményeket, és jelentést ír megállapításokkal és gyakorlati javaslatokkal. A terjedelem és az ár kérésenként kerül meghatározásra.',
+    },
+    durationMinutes: 90,
+    priceMinor: null,
+    currency: 'EUR',
+    introductory: false,
+    termsVersion: '2026-11',
+    termsText: {
+      en: 'Professional services are scoped and quoted per request; a quote binds once accepted by an authorized approver. Cancellation follows the quoted policy.',
+      'sr-Latn': 'Stručne usluge se definišu i nude po zahtevu; ponuda postaje obavezujuća kada je prihvati ovlašćeni odobravalac. Otkazivanje prati navedenu politiku.',
+      'sr-Cyrl': 'Стручне услуге се дефинишу и нуде по захтеву; понуда постаје обавезујућа када је прихвати овлашћени одобравалац. Отказивање прати наведену политику.',
+      hu: 'A szakmai szolgáltatások terjedelme és ára kérésenként kerül meghatározásra; az ajánlat a jogosult jóváhagyó elfogadásával válik kötelezővé. A lemondás az ajánlatban rögzített szabályt követi.',
+    },
+    isActive: true,
+  },
+  {
+    id: 'review_service_introductory_call',
+    key: 'introductory_call',
+    name: { en: 'Introductory call', 'sr-Latn': 'Uvodni razgovor', 'sr-Cyrl': 'Уводни разговор', hu: 'Bevezető beszélgetés' },
+    description: {
+      en: 'A free 30-minute call to understand the results and the next steps. No report and no commitment.',
+      'sr-Latn': 'Besplatan razgovor od 30 minuta o rezultatima i sledećim koracima. Bez izveštaja i bez obaveze.',
+      'sr-Cyrl': 'Бесплатан разговор од 30 минута о резултатима и следећим корацима. Без извештаја и без обавезе.',
+      hu: 'Ingyenes 30 perces beszélgetés az eredményekről és a következő lépésekről. Jelentés és kötelezettség nélkül.',
+    },
+    durationMinutes: 30,
+    priceMinor: 0,
+    currency: 'EUR',
+    introductory: true,
+    termsVersion: '2026-11',
+    termsText: {
+      en: 'The introductory call is free of charge and creates no obligation.',
+      'sr-Latn': 'Uvodni razgovor je besplatan i ne stvara obavezu.',
+      'sr-Cyrl': 'Уводни разговор је бесплатан и не ствара обавезу.',
+      hu: 'A bevezető beszélgetés díjmentes, és nem jár kötelezettséggel.',
+    },
+    isActive: true,
+  },
+] as const;
+
+/** The sample approver's ceiling for a workplace review scope: 5,000 EUR (mirrors `SAMPLE_REVIEW_APPROVER_CEILING` of the fixtures). */
+export const SAMPLE_REVIEW_APPROVER_CEILING = { type: 'spending_ceiling', amountMinor: 500_000, currency: 'EUR' } as const;
 
 /** Ids of the grants created from `EXTRA_SAMPLE_TEMPLATES`. */
 export const extraSampleGrantIds = (): string[] =>
@@ -464,6 +539,86 @@ export async function seed(db: Database, options: SeedOptions = {}): Promise<Rec
   }
 
   await seedContentResources(db);
+
+  // ── Employee listening (ADR 0002, D-EL-08): questionnaire version 1 and the sample client's configuration ──
+  const listeningAdmin = SAMPLE_PEOPLE.find((p) => p.platformRole === 'admin') ?? hrAdmin;
+  if (listeningAdmin) {
+    await upsertById(
+      db,
+      t.questionnaireVersions,
+      {
+        id: SAMPLE_QUESTIONNAIRE_V1_ID,
+        version: 1,
+        status: 'published',
+        dimensions: [...PILOT_QUESTIONNAIRE_DIMENSIONS],
+        notice: PILOT_PRIVACY_NOTICE,
+        comparableWithVersionId: null,
+        createdByUserId: listeningAdmin.id,
+        publishedByUserId: listeningAdmin.id,
+        publishedAt: SAMPLE_START_DATE,
+      },
+      { dimensions: [...PILOT_QUESTIONNAIRE_DIMENSIONS], notice: PILOT_PRIVACY_NOTICE },
+    );
+    const listeningConfig = {
+      measurementFrom: SAMPLE_START_DATE,
+      feedbackFrom: SAMPLE_START_DATE,
+      workplaceReviewsFrom: SAMPLE_START_DATE,
+      questionnaireVersionId: SAMPLE_QUESTIONNAIRE_V1_ID,
+      updatedByUserId: listeningAdmin.id,
+    };
+    await db
+      .insert(t.listeningConfigurations)
+      .values({ id: `listening_config_${SAMPLE_ORG.id}`, orgId: SAMPLE_ORG.id, ...listeningConfig })
+      .onConflictDoUpdate({ target: t.listeningConfigurations.id, set: listeningConfig });
+    await db
+      .insert(t.listeningPolicyVersions)
+      .values({
+        id: `listening_policy_${SAMPLE_ORG.id}_1`,
+        orgId: SAMPLE_ORG.id,
+        policyVersion: 1,
+        cadenceDays: 14,
+        responseWindowDays: 7,
+        reminderLimit: 2,
+        freshnessDays: 45,
+        minimumCohort: 10,
+        goodThresholdTenths: 750,
+        monitorThresholdTenths: 600,
+        algorithmVersion: 1,
+        questionnaireVersionId: SAMPLE_QUESTIONNAIRE_V1_ID,
+        effectiveFrom: SAMPLE_START_DATE,
+        createdByUserId: listeningAdmin.id,
+      })
+      .onConflictDoNothing({ target: t.listeningPolicyVersions.id });
+  }
+
+  // ── Feedback routes (ADR 0002, spec FBK-01..03): the sample organization's
+  // standard route, Stefan primary and Ivana the independent alternate. The
+  // sensitive route is not configured: it needs a staffed process first (FBK-06).
+  {
+    const standardRoute = {
+      orgId: SAMPLE_ORG.id,
+      kind: 'standard' as const,
+      categories: [...FEEDBACK_CATEGORIES],
+      primaryHandlerUserId: 'user_stefan',
+      alternateHandlerUserId: 'user_ivana',
+      enabled: true,
+      operatingHours: null,
+      responseTargetHours: DEFAULT_FEEDBACK_RESPONSE_TARGET_HOURS,
+      escalationNote: null,
+      updatedByUserId: listeningAdmin?.id ?? null,
+    };
+    await db
+      .insert(t.feedbackRoutes)
+      .values({ id: `feedback_route_${SAMPLE_ORG.id}_standard`, ...standardRoute })
+      .onConflictDoUpdate({ target: t.feedbackRoutes.id, set: standardRoute });
+  }
+
+  // ── Review services (ADR 0002, D-EL-04; spec REV-02, REV-05): the quoted
+  // workplace review and the explicitly free introductory call.
+  for (const service of REVIEW_SERVICE_SEED) {
+    const { id, ...values } = service;
+    await db.insert(t.reviewServices).values({ id, ...values }).onConflictDoUpdate({ target: t.reviewServices.id, set: values });
+  }
 
   // ── Retention policies (deterministic ids; unique keys match the ids) ──
   for (const rp of RETENTION_POLICIES) {
@@ -1241,13 +1396,17 @@ export function templatesForLegacyRoles(
 
 /**
  * Conditions a derived grant carries: the expert template is limited to the
- * expert's approved service categories. Null when there are none.
+ * expert's approved service categories; the workplace review approver carries
+ * the sample spending ceiling (its required condition). Null when there are none.
  */
 export async function derivedGrantConditions(
   db: Database,
   tmpl: PermissionTemplateDefinition,
   userId: string,
 ): Promise<unknown[] | null> {
+  if (tmpl.key === 'workplace_review_approver') return [SAMPLE_REVIEW_APPROVER_CEILING];
+  // The reviewer's grant is limited to the workplace review category (ADR 0002, D-EL-11).
+  if (tmpl.key === 'workplace_reviewer') return [...tmpl.defaultConditions];
   if (tmpl.scopeType !== 'assigned_cases' || tmpl.key !== 'expert') return null;
   const expert = await db.query.experts.findFirst({
     where: eq(t.experts.userId, userId),
@@ -1315,6 +1474,13 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     webinarPolls: t.webinarPolls,
     webinarPollOptions: t.webinarPollOptions,
     webinarPollResults: t.webinarPollResults,
+    questionnaireVersions: t.questionnaireVersions,
+    listeningConfigurations: t.listeningConfigurations,
+    surveyCycles: t.surveyCycles,
+    feedbackRoutes: t.feedbackRoutes,
+    feedbackCases: t.feedbackCases,
+    reviewServices: t.reviewServices,
+    reviewRequests: t.reviewRequests,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {

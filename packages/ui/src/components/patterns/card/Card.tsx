@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react';
+import type { AriaAttributes, ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
 
 export type CardPadding = 'none' | 'sm' | 'md' | 'lg';
 export type CardTone = 'surface' | 'subtle' | 'brand';
 
-export interface CardProps {
+export interface CardProps extends AriaAttributes {
   /** The HTML element to render. */
   as?: 'div' | 'article' | 'section' | 'li';
   /** Inner padding. */
@@ -15,6 +15,9 @@ export interface CardProps {
   interactive?: boolean;
   children: ReactNode;
   className?: string;
+  id?: string;
+  /** A landmark or live-region role; the ARIA attributes name and describe the card. */
+  role?: string;
 }
 
 const paddingClasses: Record<CardPadding, string> = {
@@ -37,9 +40,15 @@ export function Card({
   interactive,
   children,
   className,
+  id,
+  role,
+  ...aria
 }: CardProps) {
   return (
     <Tag
+      id={id}
+      role={role}
+      {...aria}
       className={cn(
         'rounded-card border border-border-subtle',
         toneClasses[tone],

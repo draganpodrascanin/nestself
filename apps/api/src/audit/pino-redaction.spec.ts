@@ -194,6 +194,36 @@ describe('pino-redaction', () => {
     expect(output).toContain('visible');
   });
 
+  it('redacts survey answers, feedback text, report sections and the reporter explanation in request bodies and nested objects (ADR 0002, PRI-04)', () => {
+    const output = captureLog((logger) => {
+      logger.info(
+        {
+          req: {
+            body: {
+              answers: { speaking_up: 4, sustainable_workload: 1 },
+              body: 'the rota changes without notice',
+              sections: { findings: 'rota notice is short' },
+              reporterExplanation: 'we agreed a notice period',
+              questionnaireVersionId: 'q_v1',
+            },
+          },
+          nested: { answers: { job_satisfaction: 2 }, sections: { proposals: 'fix the rota' }, reporterExplanation: 'explained', cycleId: 'cycle_1' },
+        },
+        'request',
+      );
+    });
+
+    expect(output).not.toContain('speaking_up');
+    expect(output).not.toContain('rota changes without notice');
+    expect(output).not.toContain('rota notice is short');
+    expect(output).not.toContain('we agreed a notice period');
+    expect(output).not.toContain('job_satisfaction');
+    expect(output).not.toContain('fix the rota');
+    expect(output).not.toContain('explained');
+    expect(output).toContain('q_v1');
+    expect(output).toContain('cycle_1');
+  });
+
   it('redacts Chime join tokens at any depth up to the join response body (CW-R-69, T-CW-1.1)', () => {
     const output = captureLog((logger) => {
       logger.info(

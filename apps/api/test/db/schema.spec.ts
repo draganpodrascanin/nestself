@@ -37,12 +37,19 @@ import {
   conversations,
   grants,
   intakeRecords,
+  listeningConfigurations,
+  listeningPolicyVersions,
   organizations,
   orgUnitClosure,
   orgUnits,
   posts,
+  questionnaireVersions,
   ssoConnections,
   ssoDomains,
+  surveyAggregateCells,
+  surveyCycles,
+  surveyResponses,
+  surveySnapshots,
   webinarMessages,
   webinarPollResults,
   webinarRegistrations,
@@ -83,8 +90,8 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
     const { rows } = await owner.pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM drizzle.__drizzle_migrations",
     );
-    // 0000 through 0020 = 21 migrations (calls at 0007-0015, CMS at 0016, auth phase 4 at 0017-0020)
-    expect(Number(rows[0]!.n)).toBe(21);
+    // 0000 through 0023 = 24 migrations (calls at 0007-0015, CMS at 0016, auth phase 4 at 0017-0020, listening at 0021, feedback cases at 0022, workplace reviews at 0023)
+    expect(Number(rows[0]!.n)).toBe(24);
   });
 
   it('"teams" view returns one row per TEAM org unit', async () => {
@@ -307,9 +314,14 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
                            'call_outcomes','call_feedback','call_consents','appointment_approvals',
                            'webinars','webinar_hosts','webinar_registrations','webinar_messages',
                            'webinar_polls','webinar_poll_options','webinar_poll_results','webinar_recordings',
-                           'sso_domains','cases')`,
+                           'sso_domains','cases',
+                           'listening_configurations','listening_policy_versions','survey_cycles','survey_participations',
+                           'survey_drafts','survey_responses','survey_snapshots','survey_aggregate_cells','survey_offer_dismissals',
+                           'feedback_routes','feedback_cases','feedback_case_reporters','feedback_messages',
+                           'review_requests','review_scopes','review_engagements','review_sharing_grants',
+                           'review_report_versions','review_engagement_notes','improvement_actions')`,
       );
-      expect(rows).toHaveLength(35);
+      expect(rows).toHaveLength(55);
       for (const row of rows) {
         expect(row.rls, row.relname).toBe(true);
         expect(row.forced, row.relname).toBe(true);
@@ -730,6 +742,170 @@ describe.skipIf(!shouldRun)('schema integration tests', () => {
       await withOrgScope(app.db, 'rls_org_a', async () => undefined);
       const rows = await app.db.select({ id: orgUnits.id }).from(orgUnits);
       expect(rows.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('employee listening (ADR 0002)', () => {
+    const DIMENSIONS = ['job_satisfaction', 'sustainable_workload', 'manager_support', 'speaking_up', 'belonging_respect'];
+    const text = { en: 'x', 'sr-Latn': 'x', 'sr-Cyrl': 'x', hu: 'x' };
+
+    beforeAll(async () => {
+      await owner.db.insert(organizations).values([
+        { id: 'el_org_a', name: 'EL A', slug: 'el-a' },
+        { id: 'el_org_b', name: 'EL B', slug: 'el-b' },
+      ]);
+      await owner.pool.query(
+        `INSERT INTO users (id, email, display_name) VALUES ('el_user', 'el_user@example.com', 'EL')`,
+      );
+      await owner.db.insert(questionnaireVersions).values({
+        id: 'el_q1',
+        version: 9001,
+        status: 'published',
+        dimensions: DIMENSIONS.map((key) => ({ key, question: text, scaleLow: text, scaleHigh: text, explanation: text })),
+        notice: text,
+        createdByUserId: 'el_user',
+        publishedAt: new Date('2026-10-01T00:00:00Z'),
+      });
+      for (const orgId of ['el_org_a', 'el_org_b']) {
+        await owner.db.insert(listeningPolicyVersions).values({
+          id: `el_policy_${orgId}`,
+          orgId,
+          policyVersion: 1,
+          cadenceDays: 14,
+          responseWindowDays: 7,
+          reminderLimit: 2,
+          freshnessDays: 45,
+          minimumCohort: 10,
+          goodThresholdTenths: 750,
+          monitorThresholdTenths: 600,
+          algorithmVersion: 1,
+          questionnaireVersionId: 'el_q1',
+          effectiveFrom: new Date('2026-10-01T00:00:00Z'),
+        });
+        await owner.db.insert(surveyCycles).values({
+          id: `el_cycle_${orgId}`,
+          orgId,
+          questionnaireVersionId: 'el_q1',
+          policyVersionId: `el_policy_${orgId}`,
+          opensAt: new Date('2026-10-10T07:00:00Z'),
+          closesAt: new Date('2026-10-17T07:00:00Z'),
+          status: 'open',
+        });
+        await owner.db.insert(surveyResponses).values({
+          id: `el_response_${orgId}`,
+          orgId,
+          cycleId: `el_cycle_${orgId}`,
+          questionnaireVersionId: 'el_q1',
+          cohortUnitId: null,
+          answers: { job_satisfaction: 4 },
+          acceptedAt: new Date('2026-10-11T08:00:00Z'),
+        });
+      }
+    });
+
+    it('survey_responses carries no user or membership column (spec PRI-03)', async () => {
+      const { rows } = await owner.pool.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'survey_responses' ORDER BY column_name`,
+      );
+      const columns = rows.map((r) => r.column_name);
+      expect(columns).toEqual(['accepted_at', 'answers', 'cohort_unit_id', 'cycle_id', 'id', 'org_id', 'questionnaire_version_id']);
+      for (const forbidden of ['user_id', 'membership_id', 'participation_id', 'email']) {
+        expect(columns).not.toContain(forbidden);
+      }
+    });
+
+    it('a tenant context reads only its own responses and cannot write into another organization', async () => {
+      const visible = await withOrgScope(app.db, 'el_org_a', (tx) =>
+        tx.select({ id: surveyResponses.id }).from(surveyResponses).where(inArray(surveyResponses.id, ['el_response_el_org_a', 'el_response_el_org_b'])),
+      );
+      expect(visible.map((r) => r.id)).toEqual(['el_response_el_org_a']);
+      const message = await driverError(
+        withOrgScope(app.db, 'el_org_a', (tx) =>
+          tx.insert(surveyResponses).values({
+            id: 'el_response_leak',
+            orgId: 'el_org_b',
+            cycleId: 'el_cycle_el_org_b',
+            questionnaireVersionId: 'el_q1',
+            answers: { speaking_up: 2 },
+            acceptedAt: new Date(),
+          }),
+        ),
+      );
+      expect(message).toMatch(/row-level security policy/);
+    });
+
+    it('refuses a reporting minimum below the platform floor (spec CFG-03)', async () => {
+      const message = await driverError(
+        owner.db.insert(listeningConfigurations).values({ id: 'el_cfg_low', orgId: 'el_org_a', minimumCohort: 9 }),
+      );
+      expect(message).toMatch(/listening_configurations_minimum_cohort_check/);
+    });
+
+    it('refuses thresholds out of order and a cycle whose close is not after its open', async () => {
+      const thresholds = await driverError(
+        owner.db.insert(listeningConfigurations).values({
+          id: 'el_cfg_thr',
+          orgId: 'el_org_a',
+          goodThresholdTenths: 600,
+          monitorThresholdTenths: 600,
+        }),
+      );
+      expect(thresholds).toMatch(/listening_configurations_thresholds_check/);
+      const window = await driverError(
+        owner.db.insert(surveyCycles).values({
+          id: 'el_cycle_bad',
+          orgId: 'el_org_a',
+          questionnaireVersionId: 'el_q1',
+          policyVersionId: 'el_policy_el_org_a',
+          opensAt: new Date('2026-10-10T07:00:00Z'),
+          closesAt: new Date('2026-10-10T07:00:00Z'),
+        }),
+      );
+      expect(window).toMatch(/survey_cycles_window_check/);
+    });
+
+    it('a cycle holds one snapshot and a participation one response', async () => {
+      await owner.db.insert(surveySnapshots).values({
+        id: 'el_snap_a',
+        orgId: 'el_org_a',
+        cycleId: 'el_cycle_el_org_a',
+        algorithmVersion: 1,
+        policyVersionId: 'el_policy_el_org_a',
+        questionnaireVersionId: 'el_q1',
+        audienceSize: 12,
+        submittedCount: 11,
+        publishedAt: new Date('2026-10-17T07:05:00Z'),
+      });
+      const duplicate = await driverError(
+        owner.db.insert(surveySnapshots).values({
+          id: 'el_snap_a2',
+          orgId: 'el_org_a',
+          cycleId: 'el_cycle_el_org_a',
+          algorithmVersion: 1,
+          policyVersionId: 'el_policy_el_org_a',
+          questionnaireVersionId: 'el_q1',
+          audienceSize: 12,
+          submittedCount: 11,
+          publishedAt: new Date(),
+        }),
+      );
+      expect(duplicate).toMatch(/survey_snapshots_cycle_id_key/);
+      const cell = await driverError(
+        owner.db.insert(surveyAggregateCells).values({
+          id: 'el_cell_bad',
+          snapshotId: 'el_snap_a',
+          orgId: 'el_org_a',
+          cohortKey: 'company',
+          dimensionKey: 'speaking_up',
+          validCount: 11,
+          favorableCount: 5,
+          neutralCount: 3,
+          unfavorableCount: 3,
+          scoreTenths: 455,
+          status: 'red',
+        }),
+      );
+      expect(cell).toMatch(/survey_aggregate_cells_status_check/);
     });
   });
 

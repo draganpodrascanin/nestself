@@ -88,3 +88,42 @@ export const intakeKeys = {
 export const reportingKeys = {
   all: (ctx: ActiveContext) => [...contextKey(ctx), 'reporting'] as const,
 };
+
+/** Employee listening (ADR 0002): the employee's survey, the organization's reports and cycles, the operations views. */
+export const listeningKeys = {
+  all: (ctx: ActiveContext) => [...contextKey(ctx), 'listening'] as const,
+  mySurvey: (ctx: ActiveContext) => [...contextKey(ctx), 'listening', 'my-survey'] as const,
+  overview: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', orgId, 'overview'] as const,
+  heatmap: (ctx: ActiveContext, orgId: string, snapshotId: string | null) =>
+    [...contextKey(ctx), 'listening', orgId, 'heatmap', snapshotId ?? 'latest'] as const,
+  dimension: (ctx: ActiveContext, orgId: string, key: string, snapshotId: string | null) =>
+    [...contextKey(ctx), 'listening', orgId, 'dimension', key, snapshotId ?? 'latest'] as const,
+  cycles: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', orgId, 'cycles'] as const,
+  configuration: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', orgId, 'configuration'] as const,
+  opsConfiguration: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', 'ops', orgId, 'configuration'] as const,
+  questionnaires: (ctx: ActiveContext) => [...contextKey(ctx), 'listening', 'ops', 'questionnaires'] as const,
+  // Feedback cases (spec Epic F)
+  feedbackRoutes: (ctx: ActiveContext) => [...contextKey(ctx), 'feedback', 'routes'] as const,
+  myFeedbackCases: (ctx: ActiveContext) => [...contextKey(ctx), 'feedback', 'mine'] as const,
+  myFeedbackCase: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'feedback', 'mine', id] as const,
+  feedbackInbox: (ctx: ActiveContext) => [...contextKey(ctx), 'feedback', 'inbox'] as const,
+  handlerCase: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'feedback', 'inbox', id] as const,
+  orgFeedbackRoutes: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'feedback', orgId, 'routes'] as const,
+  // Workplace reviews (spec Epics G and H)
+  reviewServices: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'reviews', orgId, 'services'] as const,
+  reviewRequests: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'reviews', orgId, 'requests'] as const,
+  reviewRequest: (ctx: ActiveContext, orgId: string, id: string) => [...contextKey(ctx), 'reviews', orgId, 'requests', id] as const,
+  engagements: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'reviews', orgId, 'engagements'] as const,
+  engagement: (ctx: ActiveContext, orgId: string, id: string) => [...contextKey(ctx), 'reviews', orgId, 'engagements', id] as const,
+  engagementReport: (ctx: ActiveContext, orgId: string, id: string) => [...contextKey(ctx), 'reviews', orgId, 'engagements', id, 'report'] as const,
+  opsReviewServices: (ctx: ActiveContext) => [...contextKey(ctx), 'reviews', 'ops', 'services'] as const,
+  reviewQueue: (ctx: ActiveContext) => [...contextKey(ctx), 'reviews', 'ops', 'queue'] as const,
+  opsReviewRequest: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'reviews', 'ops', 'requests', id] as const,
+  opsEngagement: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'reviews', 'ops', 'engagements', id] as const,
+  reviewerCandidates: (ctx: ActiveContext, q: string) => [...contextKey(ctx), 'reviews', 'ops', 'reviewers', q] as const,
+  myEngagements: (ctx: ActiveContext) => [...contextKey(ctx), 'reviews', 'mine'] as const,
+  myEngagement: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'reviews', 'mine', id] as const,
+  engagementPack: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'reviews', 'mine', id, 'pack'] as const,
+  myReport: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'reviews', 'mine', id, 'report'] as const,
+  engagementNotes: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'reviews', 'mine', id, 'notes'] as const,
+};

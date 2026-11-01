@@ -1,4 +1,4 @@
-import type { ElementType, ReactNode } from 'react';
+import type { AriaAttributes, ElementType, ReactNode } from 'react';
 import { cn } from '../../../lib/cn';
 
 export type HeadingTypeRole =
@@ -70,13 +70,15 @@ export function Heading({
   );
 }
 
-export interface TextProps {
+export interface TextProps extends AriaAttributes {
   as?: ElementType;
   typeRole?: TextTypeRole;
   tone?: Tone;
   className?: string;
   children: ReactNode;
   id?: string;
+  /** A live-region or landmark role for status copy. */
+  role?: string;
 }
 
 export function Text({
@@ -86,9 +88,11 @@ export function Text({
   className,
   children,
   id,
+  role,
+  ...aria
 }: TextProps) {
   return (
-    <Tag id={id} className={cn(textRoleMap[typeRole], toneMap[tone], className)}>
+    <Tag id={id} role={role} {...aria} className={cn(textRoleMap[typeRole], toneMap[tone], className)}>
       {children}
     </Tag>
   );

@@ -9,6 +9,7 @@ import enMobile from '../locales/en/mobile.json';
 import enWorkspace from '../locales/en/workspace.json';
 import enLibrary from '../locales/en/library.json';
 import enCms from '../locales/en/cms.json';
+import enListening from '../locales/en/listening.json';
 import srCyrlAdmin from '../locales/sr-Cyrl/admin.json';
 import srCyrlAuth from '../locales/sr-Cyrl/auth.json';
 import srCyrlCalls from '../locales/sr-Cyrl/calls.json';
@@ -18,6 +19,7 @@ import srCyrlMobile from '../locales/sr-Cyrl/mobile.json';
 import srCyrlWorkspace from '../locales/sr-Cyrl/workspace.json';
 import srCyrlLibrary from '../locales/sr-Cyrl/library.json';
 import srCyrlCms from '../locales/sr-Cyrl/cms.json';
+import srCyrlListening from '../locales/sr-Cyrl/listening.json';
 import huAdmin from '../locales/hu/admin.json';
 import huAuth from '../locales/hu/auth.json';
 import huCalls from '../locales/hu/calls.json';
@@ -27,6 +29,7 @@ import huMobile from '../locales/hu/mobile.json';
 import huWorkspace from '../locales/hu/workspace.json';
 import huLibrary from '../locales/hu/library.json';
 import huCms from '../locales/hu/cms.json';
+import huListening from '../locales/hu/listening.json';
 import srLatnAdmin from '../locales/sr-Latn/admin.json';
 import srLatnAuth from '../locales/sr-Latn/auth.json';
 import srLatnCalls from '../locales/sr-Latn/calls.json';
@@ -36,6 +39,7 @@ import srLatnMobile from '../locales/sr-Latn/mobile.json';
 import srLatnWorkspace from '../locales/sr-Latn/workspace.json';
 import srLatnLibrary from '../locales/sr-Latn/library.json';
 import srLatnCms from '../locales/sr-Latn/cms.json';
+import srLatnListening from '../locales/sr-Latn/listening.json';
 
 export const resources = {
   en: {
@@ -48,6 +52,7 @@ export const resources = {
     library: enLibrary,
     cms: enCms,
     calls: enCalls,
+    listening: enListening,
   },
   'sr-Latn': {
     common: srLatnCommon,
@@ -59,6 +64,7 @@ export const resources = {
     library: srLatnLibrary,
     cms: srLatnCms,
     calls: srLatnCalls,
+    listening: srLatnListening,
   },
   'sr-Cyrl': {
     common: srCyrlCommon,
@@ -70,6 +76,7 @@ export const resources = {
     library: srCyrlLibrary,
     cms: srCyrlCms,
     calls: srCyrlCalls,
+    listening: srCyrlListening,
   },
   hu: {
     common: huCommon,
@@ -81,6 +88,7 @@ export const resources = {
     library: huLibrary,
     cms: huCms,
     calls: huCalls,
+    listening: huListening,
   },
 } as const;
 

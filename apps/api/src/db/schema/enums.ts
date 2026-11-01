@@ -268,6 +268,23 @@ export const contentEventKind = pgEnum('content_event_kind', [
   'search_performed', 'search_no_result',
 ]);
 
+// ─── Employee listening (ADR 0002) ───────────────────────────────────────
+
+/** Questionnaire version lifecycle (spec SUR-01, section 8). */
+export const questionnaireStatus = pgEnum('questionnaire_status', [
+  'draft', 'in_review', 'published', 'archived',
+]);
+
+/** Survey cycle lifecycle (spec SUR-02..04, section 8). */
+export const surveyCycleStatus = pgEnum('survey_cycle_status', [
+  'scheduled', 'open', 'closing', 'published', 'canceled', 'failed',
+]);
+
+/** Private participation state (spec section 8); never an employer status list. */
+export const surveyParticipationState = pgEnum('survey_participation_state', [
+  'invited', 'draft', 'submitted', 'ineligible',
+]);
+
 // ─── Retained enums ──────────────────────────────────────────────────────
 
 export const supportArea = pgEnum('support_area', ['PSYCHOLOGICAL', 'LEGAL', 'FINANCIAL']);
@@ -372,3 +389,53 @@ export const recordingStatus = pgEnum('recording_status', [
 
 /** Consent kinds of `call_consents`, schema only in this epic [D-CW-19, CW-R-79b]. */
 export const callConsentType = pgEnum('call_consent_type', ['RECORDING', 'TRANSCRIPTION']);
+
+/** Feedback route kinds (ADR 0002, spec FBK-06): the ordinary channel and the separately staffed sensitive one. */
+export const feedbackRouteKind = pgEnum('feedback_route_kind', ['standard', 'sensitive']);
+
+/** What an employee raises through the channel (spec FBK-01). */
+export const feedbackCaseKind = pgEnum('feedback_case_kind', ['problem', 'suggestion']);
+
+/** Case lifecycle (spec section 8, FBK-04): every open state has an owner and a next action. */
+export const feedbackCaseState = pgEnum('feedback_case_state', [
+  'submitted',
+  'in_review',
+  'waiting_for_reporter',
+  'action_in_progress',
+  'resolved',
+  'closed',
+]);
+
+/** Who wrote a case message: the reporter (never identified), a handler, or the system. */
+export const feedbackMessageSender = pgEnum('feedback_message_sender', ['reporter', 'handler', 'system']);
+
+/** Workplace review request lifecycle (ADR 0002, spec section 8). */
+export const reviewRequestStatus = pgEnum('review_request_status', [
+  'submitted',
+  'needs_information',
+  'in_review',
+  'scoped',
+  'converted',
+  'declined',
+  'canceled',
+]);
+
+/** A versioned scope (quote) lifecycle: acceptance binds one immutable version (spec REV-05). */
+export const reviewScopeStatus = pgEnum('review_scope_status', ['draft', 'sent', 'accepted', 'rejected', 'expired', 'superseded']);
+
+/** Professional engagement lifecycle (spec section 8): completion is independent of score colour. */
+export const reviewEngagementStatus = pgEnum('review_engagement_status', [
+  'accepted',
+  'scheduled',
+  'in_progress',
+  'report_shared',
+  'follow_up',
+  'completed',
+  'canceled',
+]);
+
+/** Review report version lifecycle (spec REV-07): a shared version does not mutate. */
+export const reviewReportStatus = pgEnum('review_report_status', ['draft', 'in_review', 'shared', 'superseded']);
+
+/** Agreed action lifecycle (spec REV-08): a proposal becomes an action only through explicit agreement. */
+export const improvementActionStatus = pgEnum('improvement_action_status', ['proposed', 'agreed', 'in_progress', 'completed', 'not_proceeding']);

@@ -25,6 +25,7 @@ import { Route as AuthenticatedConsultationsNewRouteImport } from './routes/_aut
 import { Route as AuthenticatedEmergencyIndexRouteImport } from './routes/_authenticated/emergency/index'
 import { Route as AuthenticatedExpertsIndexRouteImport } from './routes/_authenticated/experts/index'
 import { Route as AuthenticatedExpertsExpertIdRouteImport } from './routes/_authenticated/experts/$expertId'
+import { Route as AuthenticatedListeningQuestionnairesRouteImport } from './routes/_authenticated/listening/questionnaires'
 import { Route as AuthenticatedOrganizationsIndexRouteImport } from './routes/_authenticated/organizations/index'
 import { Route as AuthenticatedOrganizationsOrgIdRouteImport } from './routes/_authenticated/organizations/$orgId'
 import { Route as AuthenticatedSsoIndexRouteImport } from './routes/_authenticated/sso/index'
@@ -32,13 +33,18 @@ import { Route as AuthenticatedSupportCallsRouteImport } from './routes/_authent
 import { Route as AuthenticatedWebinarsIndexRouteImport } from './routes/_authenticated/webinars/index'
 import { Route as AuthenticatedWebinarsWebinarIdRouteImport } from './routes/_authenticated/webinars/$webinarId'
 import { Route as AuthenticatedWebinarsNewRouteImport } from './routes/_authenticated/webinars/new'
+import { Route as AuthenticatedWorkplaceReviewsIndexRouteImport } from './routes/_authenticated/workplace-reviews/index'
+import { Route as AuthenticatedWorkplaceReviewsRequestIdRouteImport } from './routes/_authenticated/workplace-reviews/$requestId'
 import { Route as PublicInviteTokenRouteImport } from './routes/_public/invite.$token'
 import { Route as AuthenticatedCmsResourcesIndexRouteImport } from './routes/_authenticated/cms/resources/index'
 import { Route as AuthenticatedCmsResourcesResourceIdRouteImport } from './routes/_authenticated/cms/resources/$resourceId'
 import { Route as AuthenticatedCmsResourcesNewRouteImport } from './routes/_authenticated/cms/resources/new'
 import { Route as AuthenticatedOrganizationsOrgIdIndexRouteImport } from './routes/_authenticated/organizations/$orgId/index'
 import { Route as AuthenticatedOrganizationsOrgIdAccessRouteImport } from './routes/_authenticated/organizations/$orgId/access'
+import { Route as AuthenticatedOrganizationsOrgIdListeningRouteImport } from './routes/_authenticated/organizations/$orgId/listening'
 import { Route as AuthenticatedOrganizationsOrgIdPeopleRouteImport } from './routes/_authenticated/organizations/$orgId/people'
+import { Route as AuthenticatedReviewsEngagementsIndexRouteImport } from './routes/_authenticated/reviews/engagements/index'
+import { Route as AuthenticatedReviewsEngagementsEngagementIdRouteImport } from './routes/_authenticated/reviews/engagements/$engagementId'
 import { Route as AuthenticatedWebinarsWebinarIdEditRouteImport } from './routes/_authenticated/webinars/$webinarId.edit'
 import { Route as AuthenticatedWebinarsWebinarIdLiveRouteImport } from './routes/_authenticated/webinars/$webinarId.live'
 import { Route as AuthenticatedCmsResourcesResourceIdIndexRouteImport } from './routes/_authenticated/cms/resources/$resourceId/index'
@@ -130,6 +136,12 @@ const AuthenticatedExpertsExpertIdRoute =
     path: '/experts/$expertId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedListeningQuestionnairesRoute =
+  AuthenticatedListeningQuestionnairesRouteImport.update({
+    id: '/listening/questionnaires',
+    path: '/listening/questionnaires',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedOrganizationsIndexRoute =
   AuthenticatedOrganizationsIndexRouteImport.update({
     id: '/organizations/',
@@ -171,6 +183,18 @@ const AuthenticatedWebinarsNewRoute =
     path: '/webinars/new',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedWorkplaceReviewsIndexRoute =
+  AuthenticatedWorkplaceReviewsIndexRouteImport.update({
+    id: '/workplace-reviews/',
+    path: '/workplace-reviews/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedWorkplaceReviewsRequestIdRoute =
+  AuthenticatedWorkplaceReviewsRequestIdRouteImport.update({
+    id: '/workplace-reviews/$requestId',
+    path: '/workplace-reviews/$requestId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const PublicInviteTokenRoute = PublicInviteTokenRouteImport.update({
   id: '/invite/$token',
   path: '/invite/$token',
@@ -206,11 +230,29 @@ const AuthenticatedOrganizationsOrgIdAccessRoute =
     path: '/access',
     getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
   } as any)
+const AuthenticatedOrganizationsOrgIdListeningRoute =
+  AuthenticatedOrganizationsOrgIdListeningRouteImport.update({
+    id: '/listening',
+    path: '/listening',
+    getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
+  } as any)
 const AuthenticatedOrganizationsOrgIdPeopleRoute =
   AuthenticatedOrganizationsOrgIdPeopleRouteImport.update({
     id: '/people',
     path: '/people',
     getParentRoute: () => AuthenticatedOrganizationsOrgIdRoute,
+  } as any)
+const AuthenticatedReviewsEngagementsIndexRoute =
+  AuthenticatedReviewsEngagementsIndexRouteImport.update({
+    id: '/reviews/engagements/',
+    path: '/reviews/engagements/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedReviewsEngagementsEngagementIdRoute =
+  AuthenticatedReviewsEngagementsEngagementIdRouteImport.update({
+    id: '/reviews/engagements/$engagementId',
+    path: '/reviews/engagements/$engagementId',
+    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedWebinarsWebinarIdEditRoute =
   AuthenticatedWebinarsWebinarIdEditRouteImport.update({
@@ -248,10 +290,12 @@ export interface FileRoutesByFullPath {
   '/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
   '/consultations/new': typeof AuthenticatedConsultationsNewRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
+  '/listening/questionnaires': typeof AuthenticatedListeningQuestionnairesRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   '/support/calls': typeof AuthenticatedSupportCallsRoute
   '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/webinars/new': typeof AuthenticatedWebinarsNewRoute
+  '/workplace-reviews/$requestId': typeof AuthenticatedWorkplaceReviewsRequestIdRoute
   '/invite/$token': typeof PublicInviteTokenRoute
   '/access/': typeof AuthenticatedAccessIndexRoute
   '/consultations/': typeof AuthenticatedConsultationsIndexRoute
@@ -260,14 +304,18 @@ export interface FileRoutesByFullPath {
   '/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/sso/': typeof AuthenticatedSsoIndexRoute
   '/webinars/': typeof AuthenticatedWebinarsIndexRoute
+  '/workplace-reviews/': typeof AuthenticatedWorkplaceReviewsIndexRoute
   '/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdRouteWithChildren
   '/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/organizations/$orgId/listening': typeof AuthenticatedOrganizationsOrgIdListeningRoute
   '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
+  '/reviews/engagements/$engagementId': typeof AuthenticatedReviewsEngagementsEngagementIdRoute
   '/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/cms/resources/': typeof AuthenticatedCmsResourcesIndexRoute
   '/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
+  '/reviews/engagements/': typeof AuthenticatedReviewsEngagementsIndexRoute
   '/cms/resources/$resourceId/': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
   '/cms/resources/$resourceId/variants/$locale': typeof AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute
 }
@@ -282,9 +330,11 @@ export interface FileRoutesByTo {
   '/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
   '/consultations/new': typeof AuthenticatedConsultationsNewRoute
   '/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
+  '/listening/questionnaires': typeof AuthenticatedListeningQuestionnairesRoute
   '/support/calls': typeof AuthenticatedSupportCallsRoute
   '/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/webinars/new': typeof AuthenticatedWebinarsNewRoute
+  '/workplace-reviews/$requestId': typeof AuthenticatedWorkplaceReviewsRequestIdRoute
   '/invite/$token': typeof PublicInviteTokenRoute
   '/access': typeof AuthenticatedAccessIndexRoute
   '/consultations': typeof AuthenticatedConsultationsIndexRoute
@@ -293,13 +343,17 @@ export interface FileRoutesByTo {
   '/organizations': typeof AuthenticatedOrganizationsIndexRoute
   '/sso': typeof AuthenticatedSsoIndexRoute
   '/webinars': typeof AuthenticatedWebinarsIndexRoute
+  '/workplace-reviews': typeof AuthenticatedWorkplaceReviewsIndexRoute
   '/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/organizations/$orgId/listening': typeof AuthenticatedOrganizationsOrgIdListeningRoute
   '/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
+  '/reviews/engagements/$engagementId': typeof AuthenticatedReviewsEngagementsEngagementIdRoute
   '/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/cms/resources': typeof AuthenticatedCmsResourcesIndexRoute
   '/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdIndexRoute
+  '/reviews/engagements': typeof AuthenticatedReviewsEngagementsIndexRoute
   '/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
   '/cms/resources/$resourceId/variants/$locale': typeof AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute
 }
@@ -317,10 +371,12 @@ export interface FileRoutesById {
   '/_authenticated/consultations/$appointmentId': typeof AuthenticatedConsultationsAppointmentIdRoute
   '/_authenticated/consultations/new': typeof AuthenticatedConsultationsNewRoute
   '/_authenticated/experts/$expertId': typeof AuthenticatedExpertsExpertIdRoute
+  '/_authenticated/listening/questionnaires': typeof AuthenticatedListeningQuestionnairesRoute
   '/_authenticated/organizations/$orgId': typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   '/_authenticated/support/calls': typeof AuthenticatedSupportCallsRoute
   '/_authenticated/webinars/$webinarId': typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   '/_authenticated/webinars/new': typeof AuthenticatedWebinarsNewRoute
+  '/_authenticated/workplace-reviews/$requestId': typeof AuthenticatedWorkplaceReviewsRequestIdRoute
   '/_public/invite/$token': typeof PublicInviteTokenRoute
   '/_authenticated/access/': typeof AuthenticatedAccessIndexRoute
   '/_authenticated/consultations/': typeof AuthenticatedConsultationsIndexRoute
@@ -329,14 +385,18 @@ export interface FileRoutesById {
   '/_authenticated/organizations/': typeof AuthenticatedOrganizationsIndexRoute
   '/_authenticated/sso/': typeof AuthenticatedSsoIndexRoute
   '/_authenticated/webinars/': typeof AuthenticatedWebinarsIndexRoute
+  '/_authenticated/workplace-reviews/': typeof AuthenticatedWorkplaceReviewsIndexRoute
   '/_authenticated/cms/resources/$resourceId': typeof AuthenticatedCmsResourcesResourceIdRouteWithChildren
   '/_authenticated/cms/resources/new': typeof AuthenticatedCmsResourcesNewRoute
   '/_authenticated/organizations/$orgId/access': typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  '/_authenticated/organizations/$orgId/listening': typeof AuthenticatedOrganizationsOrgIdListeningRoute
   '/_authenticated/organizations/$orgId/people': typeof AuthenticatedOrganizationsOrgIdPeopleRoute
+  '/_authenticated/reviews/engagements/$engagementId': typeof AuthenticatedReviewsEngagementsEngagementIdRoute
   '/_authenticated/webinars/$webinarId/edit': typeof AuthenticatedWebinarsWebinarIdEditRoute
   '/_authenticated/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/_authenticated/cms/resources/': typeof AuthenticatedCmsResourcesIndexRoute
   '/_authenticated/organizations/$orgId/': typeof AuthenticatedOrganizationsOrgIdIndexRoute
+  '/_authenticated/reviews/engagements/': typeof AuthenticatedReviewsEngagementsIndexRoute
   '/_authenticated/cms/resources/$resourceId/': typeof AuthenticatedCmsResourcesResourceIdIndexRoute
   '/_authenticated/cms/resources/$resourceId/variants/$locale': typeof AuthenticatedCmsResourcesResourceIdVariantsLocaleRoute
 }
@@ -353,10 +413,12 @@ export interface FileRouteTypes {
     | '/consultations/$appointmentId'
     | '/consultations/new'
     | '/experts/$expertId'
+    | '/listening/questionnaires'
     | '/organizations/$orgId'
     | '/support/calls'
     | '/webinars/$webinarId'
     | '/webinars/new'
+    | '/workplace-reviews/$requestId'
     | '/invite/$token'
     | '/access/'
     | '/consultations/'
@@ -365,14 +427,18 @@ export interface FileRouteTypes {
     | '/organizations/'
     | '/sso/'
     | '/webinars/'
+    | '/workplace-reviews/'
     | '/cms/resources/$resourceId'
     | '/cms/resources/new'
     | '/organizations/$orgId/access'
+    | '/organizations/$orgId/listening'
     | '/organizations/$orgId/people'
+    | '/reviews/engagements/$engagementId'
     | '/webinars/$webinarId/edit'
     | '/webinars/$webinarId/live'
     | '/cms/resources/'
     | '/organizations/$orgId/'
+    | '/reviews/engagements/'
     | '/cms/resources/$resourceId/'
     | '/cms/resources/$resourceId/variants/$locale'
   fileRoutesByTo: FileRoutesByTo
@@ -387,9 +453,11 @@ export interface FileRouteTypes {
     | '/consultations/$appointmentId'
     | '/consultations/new'
     | '/experts/$expertId'
+    | '/listening/questionnaires'
     | '/support/calls'
     | '/webinars/$webinarId'
     | '/webinars/new'
+    | '/workplace-reviews/$requestId'
     | '/invite/$token'
     | '/access'
     | '/consultations'
@@ -398,13 +466,17 @@ export interface FileRouteTypes {
     | '/organizations'
     | '/sso'
     | '/webinars'
+    | '/workplace-reviews'
     | '/cms/resources/new'
     | '/organizations/$orgId/access'
+    | '/organizations/$orgId/listening'
     | '/organizations/$orgId/people'
+    | '/reviews/engagements/$engagementId'
     | '/webinars/$webinarId/edit'
     | '/webinars/$webinarId/live'
     | '/cms/resources'
     | '/organizations/$orgId'
+    | '/reviews/engagements'
     | '/cms/resources/$resourceId'
     | '/cms/resources/$resourceId/variants/$locale'
   id:
@@ -421,10 +493,12 @@ export interface FileRouteTypes {
     | '/_authenticated/consultations/$appointmentId'
     | '/_authenticated/consultations/new'
     | '/_authenticated/experts/$expertId'
+    | '/_authenticated/listening/questionnaires'
     | '/_authenticated/organizations/$orgId'
     | '/_authenticated/support/calls'
     | '/_authenticated/webinars/$webinarId'
     | '/_authenticated/webinars/new'
+    | '/_authenticated/workplace-reviews/$requestId'
     | '/_public/invite/$token'
     | '/_authenticated/access/'
     | '/_authenticated/consultations/'
@@ -433,14 +507,18 @@ export interface FileRouteTypes {
     | '/_authenticated/organizations/'
     | '/_authenticated/sso/'
     | '/_authenticated/webinars/'
+    | '/_authenticated/workplace-reviews/'
     | '/_authenticated/cms/resources/$resourceId'
     | '/_authenticated/cms/resources/new'
     | '/_authenticated/organizations/$orgId/access'
+    | '/_authenticated/organizations/$orgId/listening'
     | '/_authenticated/organizations/$orgId/people'
+    | '/_authenticated/reviews/engagements/$engagementId'
     | '/_authenticated/webinars/$webinarId/edit'
     | '/_authenticated/webinars/$webinarId/live'
     | '/_authenticated/cms/resources/'
     | '/_authenticated/organizations/$orgId/'
+    | '/_authenticated/reviews/engagements/'
     | '/_authenticated/cms/resources/$resourceId/'
     | '/_authenticated/cms/resources/$resourceId/variants/$locale'
   fileRoutesById: FileRoutesById
@@ -564,6 +642,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpertsExpertIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/listening/questionnaires': {
+      id: '/_authenticated/listening/questionnaires'
+      path: '/listening/questionnaires'
+      fullPath: '/listening/questionnaires'
+      preLoaderRoute: typeof AuthenticatedListeningQuestionnairesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/organizations/': {
       id: '/_authenticated/organizations/'
       path: '/organizations'
@@ -613,6 +698,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWebinarsNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/workplace-reviews/': {
+      id: '/_authenticated/workplace-reviews/'
+      path: '/workplace-reviews'
+      fullPath: '/workplace-reviews/'
+      preLoaderRoute: typeof AuthenticatedWorkplaceReviewsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/workplace-reviews/$requestId': {
+      id: '/_authenticated/workplace-reviews/$requestId'
+      path: '/workplace-reviews/$requestId'
+      fullPath: '/workplace-reviews/$requestId'
+      preLoaderRoute: typeof AuthenticatedWorkplaceReviewsRequestIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_public/invite/$token': {
       id: '/_public/invite/$token'
       path: '/invite/$token'
@@ -655,12 +754,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdAccessRouteImport
       parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
     }
+    '/_authenticated/organizations/$orgId/listening': {
+      id: '/_authenticated/organizations/$orgId/listening'
+      path: '/listening'
+      fullPath: '/organizations/$orgId/listening'
+      preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdListeningRouteImport
+      parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
+    }
     '/_authenticated/organizations/$orgId/people': {
       id: '/_authenticated/organizations/$orgId/people'
       path: '/people'
       fullPath: '/organizations/$orgId/people'
       preLoaderRoute: typeof AuthenticatedOrganizationsOrgIdPeopleRouteImport
       parentRoute: typeof AuthenticatedOrganizationsOrgIdRoute
+    }
+    '/_authenticated/reviews/engagements/': {
+      id: '/_authenticated/reviews/engagements/'
+      path: '/reviews/engagements'
+      fullPath: '/reviews/engagements/'
+      preLoaderRoute: typeof AuthenticatedReviewsEngagementsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/reviews/engagements/$engagementId': {
+      id: '/_authenticated/reviews/engagements/$engagementId'
+      path: '/reviews/engagements/$engagementId'
+      fullPath: '/reviews/engagements/$engagementId'
+      preLoaderRoute: typeof AuthenticatedReviewsEngagementsEngagementIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/webinars/$webinarId/edit': {
       id: '/_authenticated/webinars/$webinarId/edit'
@@ -729,6 +849,7 @@ const AuthenticatedCmsRouteWithChildren =
 
 interface AuthenticatedOrganizationsOrgIdRouteChildren {
   AuthenticatedOrganizationsOrgIdAccessRoute: typeof AuthenticatedOrganizationsOrgIdAccessRoute
+  AuthenticatedOrganizationsOrgIdListeningRoute: typeof AuthenticatedOrganizationsOrgIdListeningRoute
   AuthenticatedOrganizationsOrgIdPeopleRoute: typeof AuthenticatedOrganizationsOrgIdPeopleRoute
   AuthenticatedOrganizationsOrgIdIndexRoute: typeof AuthenticatedOrganizationsOrgIdIndexRoute
 }
@@ -737,6 +858,8 @@ const AuthenticatedOrganizationsOrgIdRouteChildren: AuthenticatedOrganizationsOr
   {
     AuthenticatedOrganizationsOrgIdAccessRoute:
       AuthenticatedOrganizationsOrgIdAccessRoute,
+    AuthenticatedOrganizationsOrgIdListeningRoute:
+      AuthenticatedOrganizationsOrgIdListeningRoute,
     AuthenticatedOrganizationsOrgIdPeopleRoute:
       AuthenticatedOrganizationsOrgIdPeopleRoute,
     AuthenticatedOrganizationsOrgIdIndexRoute:
@@ -775,10 +898,12 @@ interface AuthenticatedRouteChildren {
   AuthenticatedConsultationsAppointmentIdRoute: typeof AuthenticatedConsultationsAppointmentIdRoute
   AuthenticatedConsultationsNewRoute: typeof AuthenticatedConsultationsNewRoute
   AuthenticatedExpertsExpertIdRoute: typeof AuthenticatedExpertsExpertIdRoute
+  AuthenticatedListeningQuestionnairesRoute: typeof AuthenticatedListeningQuestionnairesRoute
   AuthenticatedOrganizationsOrgIdRoute: typeof AuthenticatedOrganizationsOrgIdRouteWithChildren
   AuthenticatedSupportCallsRoute: typeof AuthenticatedSupportCallsRoute
   AuthenticatedWebinarsWebinarIdRoute: typeof AuthenticatedWebinarsWebinarIdRouteWithChildren
   AuthenticatedWebinarsNewRoute: typeof AuthenticatedWebinarsNewRoute
+  AuthenticatedWorkplaceReviewsRequestIdRoute: typeof AuthenticatedWorkplaceReviewsRequestIdRoute
   AuthenticatedAccessIndexRoute: typeof AuthenticatedAccessIndexRoute
   AuthenticatedConsultationsIndexRoute: typeof AuthenticatedConsultationsIndexRoute
   AuthenticatedEmergencyIndexRoute: typeof AuthenticatedEmergencyIndexRoute
@@ -786,6 +911,9 @@ interface AuthenticatedRouteChildren {
   AuthenticatedOrganizationsIndexRoute: typeof AuthenticatedOrganizationsIndexRoute
   AuthenticatedSsoIndexRoute: typeof AuthenticatedSsoIndexRoute
   AuthenticatedWebinarsIndexRoute: typeof AuthenticatedWebinarsIndexRoute
+  AuthenticatedWorkplaceReviewsIndexRoute: typeof AuthenticatedWorkplaceReviewsIndexRoute
+  AuthenticatedReviewsEngagementsEngagementIdRoute: typeof AuthenticatedReviewsEngagementsEngagementIdRoute
+  AuthenticatedReviewsEngagementsIndexRoute: typeof AuthenticatedReviewsEngagementsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -798,12 +926,16 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedConsultationsAppointmentIdRoute,
   AuthenticatedConsultationsNewRoute: AuthenticatedConsultationsNewRoute,
   AuthenticatedExpertsExpertIdRoute: AuthenticatedExpertsExpertIdRoute,
+  AuthenticatedListeningQuestionnairesRoute:
+    AuthenticatedListeningQuestionnairesRoute,
   AuthenticatedOrganizationsOrgIdRoute:
     AuthenticatedOrganizationsOrgIdRouteWithChildren,
   AuthenticatedSupportCallsRoute: AuthenticatedSupportCallsRoute,
   AuthenticatedWebinarsWebinarIdRoute:
     AuthenticatedWebinarsWebinarIdRouteWithChildren,
   AuthenticatedWebinarsNewRoute: AuthenticatedWebinarsNewRoute,
+  AuthenticatedWorkplaceReviewsRequestIdRoute:
+    AuthenticatedWorkplaceReviewsRequestIdRoute,
   AuthenticatedAccessIndexRoute: AuthenticatedAccessIndexRoute,
   AuthenticatedConsultationsIndexRoute: AuthenticatedConsultationsIndexRoute,
   AuthenticatedEmergencyIndexRoute: AuthenticatedEmergencyIndexRoute,
@@ -811,6 +943,12 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedOrganizationsIndexRoute: AuthenticatedOrganizationsIndexRoute,
   AuthenticatedSsoIndexRoute: AuthenticatedSsoIndexRoute,
   AuthenticatedWebinarsIndexRoute: AuthenticatedWebinarsIndexRoute,
+  AuthenticatedWorkplaceReviewsIndexRoute:
+    AuthenticatedWorkplaceReviewsIndexRoute,
+  AuthenticatedReviewsEngagementsEngagementIdRoute:
+    AuthenticatedReviewsEngagementsEngagementIdRoute,
+  AuthenticatedReviewsEngagementsIndexRoute:
+    AuthenticatedReviewsEngagementsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

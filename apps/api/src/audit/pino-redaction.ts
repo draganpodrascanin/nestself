@@ -41,6 +41,12 @@ export const PINO_REDACT_PATHS: string[] = [
   'req.body.oidcClientSecret',
   'req.body.verificationToken',
   'req.body.handle',
+  // Employee listening (ADR 0002, spec PRI-04): survey answers, feedback case
+  // text and report sections.
+  'req.body.answers',
+  'req.body.body',
+  'req.body.sections',
+  'req.body.reporterExplanation',
 
   // Wildcard paths for nested objects
   '*.password',
@@ -72,6 +78,9 @@ export const PINO_REDACT_PATHS: string[] = [
   '*.*.*.JoinToken',
   '*.challengeToken',
   '*.handle',
+  '*.answers',
+  '*.sections',
+  '*.reporterExplanation',
 ];
 
 export const PINO_REDACT_CONFIG = {

@@ -39,6 +39,7 @@ import {
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { SessionService } from '../session/session.service.js';
 import { METADATA_FETCHER, metadataFailureLabel, type MetadataFetcher } from '../sso/metadata-fetcher.js';
+import { FeedbackEscalationService, type FeedbackEscalationReport } from '../feedback-cases/feedback-escalation.service.js';
 
 /** Months of `audit_events` partitions kept ahead of today (D-21). */
 export const AUDIT_PARTITION_MONTHS_AHEAD = 3;
@@ -50,6 +51,7 @@ export const MAINTENANCE_JOB_NAMES = [
   'emergency.sweep-expired',
   'sessions.reconcile-ttl',
   'sso.certificate-expiry',
+  'feedback.escalate-overdue',
 ] as const;
 export type MaintenanceJobName = (typeof MAINTENANCE_JOB_NAMES)[number];
 
@@ -122,7 +124,8 @@ export type MaintenanceReport =
   | ({ job: 'mobile.prune-stale-families' } & StaleFamilyReport)
   | ({ job: 'emergency.sweep-expired' } & EmergencySweepReport)
   | SessionTtlReport
-  | SsoCertificateReport;
+  | SsoCertificateReport
+  | ({ job: 'feedback.escalate-overdue' } & FeedbackEscalationReport);
 
 @Injectable()
 export class MaintenanceJobsService {
@@ -142,6 +145,7 @@ export class MaintenanceJobsService {
     @Inject(METADATA_FETCHER) private readonly metadata: MetadataFetcher,
     @Inject(forwardRef(() => Mailer)) private readonly mailer: Mailer,
     @Inject(forwardRef(() => ConfigService)) private readonly config: ConfigService,
+    @Inject(forwardRef(() => FeedbackEscalationService)) private readonly feedbackEscalation: FeedbackEscalationService,
   ) {}
 
   /** Run one job by name. */
@@ -159,6 +163,8 @@ export class MaintenanceJobsService {
         return this.reconcileSessionTtl(now);
       case 'sso.certificate-expiry':
         return this.checkSsoCertificates(now);
+      case 'feedback.escalate-overdue':
+        return { job: name, ...(await this.feedbackEscalation.escalateOverdue(now)) };
     }
   }
 

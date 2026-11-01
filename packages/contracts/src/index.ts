@@ -268,3 +268,36 @@ export * from './content/library.ts';
 export * from './appointments.ts';
 export * from './calls.ts';
 export * from './webinars.ts';
+
+// ---------------------------------------------------------------------------
+// Employee listening: contracts and the shared scoring library (ADR 0002)
+// ---------------------------------------------------------------------------
+
+export * from './listening.ts';
+export * from './feedback-cases.ts';
+export * from './workplace-reviews.ts';
+export { PILOT_QUESTIONNAIRE_DIMENSIONS, PILOT_PRIVACY_NOTICE } from './listening-pilot.ts';
+
+export {
+  LISTENING_DIMENSION_KEYS,
+  GRAY_REASONS,
+  SCORE_STATUSES,
+  PLATFORM_MINIMUM_COHORT,
+  DEFAULT_LISTENING_POLICY,
+  isListeningDimensionKey,
+  scoreTenths,
+  classifyScore,
+  formatScoreTenths,
+  trendTenths,
+  isStale,
+  planSuppression,
+} from './listening-scoring.ts';
+export type {
+  ListeningDimensionKey,
+  GrayReason,
+  ScoreStatus,
+  ScoreThresholds,
+  CohortCount,
+  CohortVisibility,
+  SuppressionPlan,
+} from './listening-scoring.ts';

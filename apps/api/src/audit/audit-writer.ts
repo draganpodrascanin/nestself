@@ -95,6 +95,15 @@ const FORBIDDEN_KEY_NAMES = [
   // Crisis-readiness location an employee shares before a consultation (CALL-34, CW-R-80a)
   'locationText',
   'ip',
+  // Employee listening (ADR 0002, spec PRI-04): survey answers, feedback case
+  // bodies and notes, report sections and the reporter's identity never enter
+  // an audit row.
+  'answers',
+  'reporterUserId',
+  'sections',
+  'internalNote',
+  'caseBody',
+  'reporterExplanation',
 ];
 
 const FORBIDDEN_KEYS: ReadonlySet<string> = new Set(FORBIDDEN_KEY_NAMES.map(normaliseKey));

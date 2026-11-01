@@ -4,12 +4,12 @@ import { isAction, CONFIDENTIAL_ACTIONS } from './actions.ts';
 import { STEP_UP_CLASS_BY_ACTION } from './authorization.ts';
 
 describe('templates', () => {
-  it('TEMPLATE_KEYS has exactly 21 entries', () => {
-    expect(TEMPLATE_KEYS).toHaveLength(21);
+  it('TEMPLATE_KEYS has exactly 28 entries', () => {
+    expect(TEMPLATE_KEYS).toHaveLength(28);
   });
 
-  it('PERMISSION_TEMPLATES has exactly 21 entries', () => {
-    expect(PERMISSION_TEMPLATES).toHaveLength(21);
+  it('PERMISSION_TEMPLATES has exactly 28 entries', () => {
+    expect(PERMISSION_TEMPLATES).toHaveLength(28);
   });
 
   it('every template key in PERMISSION_TEMPLATES is unique', () => {
@@ -121,6 +121,33 @@ describe('templates', () => {
     ]));
   });
 
+  it('employee listening templates follow ADR 0002 (spec section 3)', () => {
+    const byKey = (k: string) => PERMISSION_TEMPLATES.find((t) => t.key === k)!;
+    const holders = (action: string) =>
+      PERMISSION_TEMPLATES.filter((t) => (t.actions as readonly string[]).includes(action)).map((t) => t.key).sort();
+    expect(byKey('survey_administrator').scopeType).toBe('organization');
+    expect(byKey('feedback_handler').scopeType).toBe('assigned_cases');
+    expect(byKey('feedback_handler').stepUpActions).toEqual(['feedback_case.handle', 'feedback_case.assign']);
+    expect(byKey('workplace_review_approver').scopeType).toBe('organization');
+    expect([...byKey('workplace_review_approver').requiredConditionTypes]).toEqual(['spending_ceiling']);
+    expect(byKey('listening_administrator').workspace).toBe('operations');
+    expect(byKey('review_coordinator').scopeType).toBe('platform');
+    expect(byKey('workplace_reviewer').workspace).toBe('expert');
+    expect(byKey('workplace_reviewer').scopeType).toBe('assigned_cases');
+    // Independence: one template per responsibility (spec CFG-02).
+    expect(holders('listening.cycles.manage')).toEqual(['survey_administrator']);
+    expect(holders('listening.reports.export')).toEqual(['reporting_user']);
+    expect(holders('feedback_case.handle')).toEqual(['feedback_handler']);
+    expect(holders('workplace_reviews.scope.accept')).toEqual(['workplace_review_approver']);
+    expect(holders('workplace_reviews.coordinate')).toEqual(['platform_owner', 'review_coordinator']);
+    expect(holders('listening.configure')).toEqual(['client_operations', 'listening_administrator', 'platform_owner']);
+    expect(holders('workplace_reviews.report.publish')).toEqual(['workplace_reviewer']);
+    expect(byKey('employee').actions).toEqual(
+      expect.arrayContaining(['listening.respond.self', 'feedback_case.create.self', 'feedback_case.read.self', 'feedback_case.reply.self']),
+    );
+    expect(byKey('hr_admin').actions).not.toContain('listening.reports.read');
+  });
+
   it('specific templates have the expected requiredConditionTypes', () => {
     const byKey = (k: string) => PERMISSION_TEMPLATES.find((t) => t.key === k)!;
     expect([...byKey('expert').requiredConditionTypes]).toEqual(['categories']);
@@ -128,12 +155,15 @@ describe('templates', () => {
     expect([...byKey('approver').requiredConditionTypes]).toEqual(['spending_ceiling', 'categories']);
     expect([...byKey('employer_finance').requiredConditionTypes]).toEqual(['spending_ceiling']);
     expect([...byKey('event_supplier').requiredConditionTypes]).toEqual(['time_window']);
+    // The reviewer joins only workplace review meetings (ADR 0002, D-EL-11).
+    expect([...byKey('workplace_reviewer').requiredConditionTypes]).toEqual(['categories']);
+    expect(byKey('workplace_reviewer').defaultConditions).toEqual([{ type: 'categories', allowed: ['workplace_review'] }]);
   });
 
   it('templates without required conditions have an empty array', () => {
     const withRequired = new Set([
       'expert', 'team_manager', 'approver', 'employer_finance', 'event_supplier',
-      'content_reviewer', 'intake_professional',
+      'content_reviewer', 'intake_professional', 'workplace_review_approver', 'workplace_reviewer',
     ]);
     for (const t of PERMISSION_TEMPLATES) {
       if (!withRequired.has(t.key)) {

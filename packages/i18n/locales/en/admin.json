@@ -182,7 +182,14 @@
       "reporting_user": "Reporting user",
       "employee": "Employee",
       "event_supplier": "Event supplier",
-      "delegated": "Delegated access"
+      "delegated": "Delegated access",
+      "survey_administrator": "Survey administrator",
+      "feedback_handler": "Feedback handler",
+      "workplace_review_requester": "Workplace review requester",
+      "workplace_review_approver": "Workplace review approver",
+      "listening_administrator": "Listening administrator",
+      "review_coordinator": "Review coordinator",
+      "workplace_reviewer": "Workplace reviewer"
     },
     "scope": {
       "platform": "Whole platform",

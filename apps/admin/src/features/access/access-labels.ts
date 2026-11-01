@@ -28,6 +28,13 @@ const TRANSLATED_TEMPLATES = [
   'reporting_user',
   'employee',
   'event_supplier',
+  'survey_administrator',
+  'feedback_handler',
+  'workplace_review_requester',
+  'workplace_review_approver',
+  'listening_administrator',
+  'review_coordinator',
+  'workplace_reviewer',
 ] as const;
 type TranslatedTemplate = (typeof TRANSLATED_TEMPLATES)[number];
 
