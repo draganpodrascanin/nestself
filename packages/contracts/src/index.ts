@@ -268,3 +268,31 @@ export * from './content/library.ts';
 export * from './appointments.ts';
 export * from './calls.ts';
 export * from './webinars.ts';
+
+// ---------------------------------------------------------------------------
+// Employee listening: the shared scoring and disclosure library (ADR 0002)
+// ---------------------------------------------------------------------------
+
+export {
+  LISTENING_DIMENSION_KEYS,
+  GRAY_REASONS,
+  SCORE_STATUSES,
+  PLATFORM_MINIMUM_COHORT,
+  DEFAULT_LISTENING_POLICY,
+  isListeningDimensionKey,
+  scoreTenths,
+  classifyScore,
+  formatScoreTenths,
+  trendTenths,
+  isStale,
+  planSuppression,
+} from './listening-scoring.ts';
+export type {
+  ListeningDimensionKey,
+  GrayReason,
+  ScoreStatus,
+  ScoreThresholds,
+  CohortCount,
+  CohortVisibility,
+  SuppressionPlan,
+} from './listening-scoring.ts';
