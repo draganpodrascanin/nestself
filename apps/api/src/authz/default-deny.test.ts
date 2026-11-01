@@ -283,6 +283,137 @@ describe('Default-deny: every route has @Public, @Authenticated or @Authorize', 
     });
   });
 
+  it('covers the employee listening controllers: canonical actions, and @Authenticated() where the assignment is checked in the service (ADR 0002)', async () => {
+    if (!module) {
+      module = await Test.createTestingModule({
+        imports: [AppModule, DiscoveryModule],
+      })
+        .overrideProvider(DbService)
+        .useValue(dbStub)
+        .compile();
+    }
+
+    const discovery = module.get(DiscoveryService);
+    const scanner = module.get(MetadataScanner);
+    const reflector = module.get(Reflector);
+
+    const policiesOf = (controller: string): Record<string, string> => {
+      const wrapper = discovery.getControllers().find((w) => w.instance?.constructor.name === controller);
+      expect(wrapper, `${controller} is registered`).toBeDefined();
+      const instance = wrapper!.instance as object;
+      const prototype = Object.getPrototypeOf(instance) as object;
+      const policies: Record<string, string> = {};
+      for (const methodName of scanner.getAllMethodNames(prototype)) {
+        const handler = (prototype as Record<string, unknown>)[methodName];
+        if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
+        const targets = [handler, instance.constructor];
+        const authorize = reflector.getAllAndOverride<{ actions: string[] } | undefined>(AUTHORIZE_KEY, targets);
+        const authenticated = reflector.getAllAndOverride<boolean>(IS_AUTHENTICATED_ONLY_KEY, targets);
+        const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets);
+        policies[methodName] = isPublic ? 'public' : authenticated ? 'authenticated' : (authorize?.actions[0] ?? 'none');
+      }
+      return policies;
+    };
+
+    // Surveys and reports (spec SUR, REP): the employee's own participation in the personal context, the employer's reports in the organization context.
+    expect(policiesOf('ListeningController')).toEqual({
+      mySurvey: 'listening.respond.self',
+      saveDraft: 'listening.respond.self',
+      submit: 'listening.respond.self',
+      listCycles: 'listening.cycles.manage',
+      scheduleCycle: 'listening.cycles.manage',
+      cancelCycle: 'listening.cycles.manage',
+      overview: 'listening.reports.read',
+      heatmap: 'listening.reports.read',
+      dimension: 'listening.reports.read',
+      dismissOffer: 'workplace_reviews.request',
+      exportCsv: 'listening.reports.export',
+      // Reporting users and survey administrators both read the rules; the decorator carries both actions.
+      readConfiguration: 'listening.reports.read',
+    });
+
+    expect(policiesOf('ListeningOpsController')).toEqual({
+      getConfiguration: 'listening.configure',
+      updateConfiguration: 'listening.configure',
+      listQuestionnaires: 'listening.templates.write',
+      createQuestionnaire: 'listening.templates.write',
+      updateQuestionnaire: 'listening.templates.write',
+      submitReview: 'listening.templates.write',
+      archive: 'listening.templates.write',
+      publish: 'listening.templates.publish',
+    });
+
+    // Feedback cases (spec FBK): the reporter's own case and the handler's inbox are resolved in the service, because the
+    // case row is confidential and the reporter link is the only way to know it is theirs (PRI-03).
+    expect(policiesOf('FeedbackCasesController')).toEqual({
+      routesForEmployee: 'feedback_case.create.self',
+      create: 'feedback_case.create.self',
+      listMine: 'feedback_case.read.self',
+      readMine: 'authenticated',
+      replyMine: 'authenticated',
+      inbox: 'authenticated',
+      readAssigned: 'feedback_case.handle',
+      postMessage: 'feedback_case.handle',
+      setState: 'feedback_case.handle',
+      reassign: 'feedback_case.assign',
+      listRoutes: 'org.settings',
+      updateRoutes: 'org.settings',
+    });
+
+    // Workplace reviews (spec REV): the requester, the approver (financial step-up) and the action owner on the employer side.
+    expect(policiesOf('WorkplaceReviewsController')).toEqual({
+      services: 'workplace_reviews.request',
+      create: 'workplace_reviews.request',
+      list: 'workplace_reviews.request',
+      get: 'workplace_reviews.request',
+      cancelRequest: 'workplace_reviews.request',
+      answerInformation: 'workplace_reviews.request',
+      acceptScope: 'workplace_reviews.scope.accept',
+      rejectScope: 'workplace_reviews.scope.accept',
+      listEngagements: 'workplace_reviews.engagement.read',
+      getEngagement: 'workplace_reviews.engagement.read',
+      book: 'workplace_reviews.request',
+      cancelEngagement: 'workplace_reviews.request',
+      share: 'workplace_reviews.request',
+      revoke: 'workplace_reviews.request',
+      report: 'workplace_reviews.engagement.read',
+      listActions: 'workplace_reviews.engagement.read',
+      createAction: 'workplace_reviews.actions.manage',
+      updateAction: 'workplace_reviews.actions.manage',
+    });
+
+    expect(policiesOf('WorkplaceReviewsOpsController')).toEqual({
+      services: 'workplace_reviews.coordinate',
+      queue: 'workplace_reviews.coordinate',
+      get: 'workplace_reviews.coordinate',
+      triage: 'workplace_reviews.coordinate',
+      sendScope: 'workplace_reviews.coordinate',
+      reviewers: 'workplace_reviews.coordinate',
+      engagement: 'workplace_reviews.coordinate',
+      assign: 'workplace_reviews.coordinate',
+      windows: 'workplace_reviews.coordinate',
+      cancel: 'workplace_reviews.coordinate',
+    });
+
+    // The reviewer's routes: the assignment (a CASE-like reviewer assignment on the engagement) is checked in the service,
+    // and `workplace_reviews.report.write` / `.publish` through `AuthorizationService.require` on the engagement resource.
+    expect(policiesOf('WorkplaceReviewsExpertController')).toEqual({
+      list: 'authenticated',
+      get: 'authenticated',
+      pack: 'authenticated',
+      report: 'authenticated',
+      saveReport: 'authenticated',
+      submitReview: 'authenticated',
+      share: 'authenticated',
+      notes: 'authenticated',
+      addNote: 'authenticated',
+      listActions: 'authenticated',
+      propose: 'authenticated',
+      followUp: 'authenticated',
+      complete: 'authenticated',
+    });
+  });
+
   it('every @WebSocketGateway @SubscribeMessage handler must declare a security decorator (AUTHZ-R-62)', async () => {
     if (!module) {
       module = await Test.createTestingModule({

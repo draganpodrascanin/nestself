@@ -141,6 +141,39 @@ describe('AuditWriter', () => {
       expect(details).toHaveProperty('safeField', 'visible');
     });
 
+    it('sanitises the employee listening keys: answers, reporterUserId, sections, internalNote, caseBody, reporterExplanation (ADR 0002, PRI-04)', async () => {
+      const { writer, repo } = makeWriter();
+      await writer.record({
+        action: 'feedback_case.created',
+        actorUserId: null,
+        actorKind: 'SYSTEM',
+        recordType: 'FeedbackCase',
+        recordId: 'fc1',
+        result: 'ALLOWED',
+        details: {
+          answers: { speaking_up: 4 },
+          reporterUserId: 'user_jovan',
+          sections: { findings: 'draft text' },
+          internalNote: 'handler note',
+          caseBody: 'the report text',
+          reporterExplanation: 'why it was resolved',
+          nested: { answers: { job_satisfaction: 2 }, reporterUserId: 'user_jovan' },
+          pseudonym: 'Reporter-K7PQ',
+          routeKind: 'standard',
+        },
+      });
+
+      const row = repo.insertEvent.mock.calls[0]![0];
+      const details = row.details as Record<string, unknown>;
+      for (const key of ['answers', 'reporterUserId', 'sections', 'internalNote', 'caseBody', 'reporterExplanation']) {
+        expect(details, key).not.toHaveProperty(key);
+      }
+      expect(details['nested']).toEqual({});
+      expect(details).toHaveProperty('pseudonym', 'Reporter-K7PQ');
+      expect(details).toHaveProperty('routeKind', 'standard');
+      expect(JSON.stringify(details)).not.toMatch(/user_jovan|draft text|handler note|report text/);
+    });
+
     it('does not throw on write failure in non-strict mode', async () => {
       const repo = makeRepoMock();
       repo.insertEvent.mockRejectedValue(new Error('db down'));
