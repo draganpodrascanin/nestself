@@ -83,9 +83,32 @@ describe('templatesForLegacyRoles', () => {
 });
 
 describe('EXTRA_SAMPLE_TEMPLATES', () => {
-  it('makes the sample HR admin the employer owner as well', () => {
-    expect(EXTRA_SAMPLE_TEMPLATES).toEqual({ user_ivana: ['employer_owner', 'approver'] });
-    expect(extraSampleGrantIds()).toEqual(['grant_user_ivana_employer_owner', 'grant_user_ivana_approver']);
+  it('makes the sample HR admin the employer owner, approver and the listening roles of ADR 0002', () => {
+    expect(EXTRA_SAMPLE_TEMPLATES).toEqual({
+      user_ivana: [
+        'employer_owner',
+        'approver',
+        'survey_administrator',
+        'workplace_review_requester',
+        'workplace_review_approver',
+        'feedback_handler',
+      ],
+      user_stefan: ['feedback_handler'],
+      user_milica: ['workplace_reviewer'],
+      user_nikola: ['review_coordinator', 'listening_administrator'],
+    });
+    expect(extraSampleGrantIds()).toEqual([
+      'grant_user_ivana_employer_owner',
+      'grant_user_ivana_approver',
+      'grant_user_ivana_survey_administrator',
+      'grant_user_ivana_workplace_review_requester',
+      'grant_user_ivana_workplace_review_approver',
+      'grant_user_ivana_feedback_handler',
+      'grant_user_stefan_feedback_handler',
+      'grant_user_milica_workplace_reviewer',
+      'grant_user_nikola_review_coordinator',
+      'grant_user_nikola_listening_administrator',
+    ]);
   });
 
   it('gives employer_owner to exactly one person in org_sample: Ivana (owner model)', () => {
@@ -109,7 +132,7 @@ describe('EXTRA_SAMPLE_TEMPLATES', () => {
     const derived = SAMPLE_PEOPLE.filter((p) => p.orgId || p.platformRole).flatMap((p) =>
       templatesForLegacyRoles(p.orgRole ?? null, p.platformRole ?? null).map((tmpl) => `grant_${p.id}_${tmpl.key}`),
     );
-    // 19 legacy-derived + 2 extra (employer_owner, approver) + 4 editorial staff (T-CW-2.1 + CMS-EE)
+    // 19 legacy-derived + 10 extra (owner, approver, the listening roles) + 4 editorial staff (T-CW-2.1 + CMS-EE)
     const seeded = [...derived, ...extraSampleGrantIds(), ...editorialStaffGrantIds()].sort();
     expect(seeded).toEqual(SAMPLE_GRANTS.map((g) => g.id).sort());
   });

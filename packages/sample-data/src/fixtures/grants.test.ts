@@ -59,6 +59,22 @@ describe('SAMPLE_GRANTS', () => {
     }
   });
 
+  it('mirrors the employee listening roles of the API seed (ADR 0002)', () => {
+    const byId = (id: string) => SAMPLE_GRANTS.find((g) => g.id === id);
+    expect(byId('grant_user_stefan_feedback_handler')?.scopeType).toBe('assigned_cases');
+    expect(byId('grant_user_stefan_feedback_handler')?.scopeOrgId).toBe('org_sample');
+    expect(byId('grant_user_ivana_feedback_handler')).toBeDefined();
+    expect(byId('grant_user_ivana_survey_administrator')?.scopeType).toBe('organization');
+    expect(byId('grant_user_ivana_workplace_review_requester')?.scopeOrgId).toBe('org_sample');
+    expect(byId('grant_user_ivana_workplace_review_approver')?.conditions).toEqual([
+      { type: 'spending_ceiling', amountMinor: 500_000, currency: 'EUR' },
+    ]);
+    expect(byId('grant_user_milica_workplace_reviewer')?.scopeOrgId).toBeNull();
+    expect(byId('grant_user_nikola_review_coordinator')?.scopeType).toBe('platform');
+    expect(byId('grant_user_nikola_listening_administrator')?.scopeType).toBe('platform');
+    expect(SAMPLE_GRANTS.filter((g) => g.subjectUserId === 'user_jovan').map((g) => g.templateKey)).toEqual(['employee']);
+  });
+
   it('mirrors the editorial staff grants, the reviewer with its categories condition', () => {
     for (const staff of SAMPLE_EDITORIAL_STAFF) {
       const grant = SAMPLE_GRANTS.find((g) => g.id === `grant_${staff.id}_${staff.templateKey}`);

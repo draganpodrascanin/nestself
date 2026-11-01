@@ -126,4 +126,56 @@ const APPROVER_GRANT: SampleGrant = {
   actions: [...(APPROVER_TEMPLATE?.actions ?? [])],
 };
 
-export const SAMPLE_GRANTS: SampleGrant[] = [...DERIVED_GRANTS, OWNER_GRANT, ...EDITORIAL_GRANTS, APPROVER_GRANT];
+/**
+ * Employee listening roles of the sample people (ADR 0002), mirroring the
+ * API seed's `EXTRA_SAMPLE_TEMPLATES`: Ivana administers surveys, requests
+ * and approves workplace reviews (ceiling 5,000 EUR) and is the alternate
+ * feedback handler; Stefan is the primary feedback handler; Milica is a
+ * qualified workplace reviewer; Nikola coordinates reviews and administers
+ * listening. None of these templates has a legacy role.
+ */
+const LISTENING_EXTRAS: ReadonlyArray<{ userId: string; orgId: string | null; templateKey: string }> = [
+  { userId: 'user_ivana', orgId: 'org_sample', templateKey: 'survey_administrator' },
+  { userId: 'user_ivana', orgId: 'org_sample', templateKey: 'workplace_review_requester' },
+  { userId: 'user_ivana', orgId: 'org_sample', templateKey: 'workplace_review_approver' },
+  { userId: 'user_ivana', orgId: 'org_sample', templateKey: 'feedback_handler' },
+  { userId: 'user_stefan', orgId: 'org_sample', templateKey: 'feedback_handler' },
+  { userId: 'user_milica', orgId: null, templateKey: 'workplace_reviewer' },
+  { userId: 'user_nikola', orgId: null, templateKey: 'review_coordinator' },
+  { userId: 'user_nikola', orgId: null, templateKey: 'listening_administrator' },
+];
+
+/** The sample approver's ceiling for a workplace review scope: 5,000 EUR in minor units. */
+export const SAMPLE_REVIEW_APPROVER_CEILING = { type: 'spending_ceiling', amountMinor: 500_000, currency: 'EUR' } as const;
+
+const LISTENING_GRANTS: SampleGrant[] = LISTENING_EXTRAS.map(({ userId, orgId, templateKey }): SampleGrant => {
+  const tmpl = PERMISSION_TEMPLATES.find((t) => t.key === templateKey)!;
+  const scope =
+    tmpl.scopeType === 'platform'
+      ? { scopeOrgId: null, scopeOrgUnitId: null, includeDescendants: false }
+      : { scopeOrgId: orgId, scopeOrgUnitId: null, includeDescendants: false };
+  return {
+    id: `grant_${userId}_${tmpl.key}`,
+    subjectUserId: userId,
+    templateKey: tmpl.key,
+    actions: [...tmpl.actions],
+    scopeType: tmpl.scopeType,
+    ...scope,
+    conditions: tmpl.key === 'workplace_review_approver' ? [SAMPLE_REVIEW_APPROVER_CEILING] : [],
+    validFrom: GRANTED_AT,
+    validUntil: null,
+    parentGrantId: null,
+    grantedByUserId: GRANTED_BY,
+    grantedAt: GRANTED_AT,
+    revokedAt: null,
+    sample: true,
+  };
+});
+
+export const SAMPLE_GRANTS: SampleGrant[] = [
+  ...DERIVED_GRANTS,
+  OWNER_GRANT,
+  ...EDITORIAL_GRANTS,
+  APPROVER_GRANT,
+  ...LISTENING_GRANTS,
+];

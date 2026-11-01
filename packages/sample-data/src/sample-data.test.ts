@@ -307,8 +307,12 @@ describe('SAMPLE_CONVERSATIONS', () => {
 });
 
 describe('SAMPLE_EXPERT_CREDENTIALS', () => {
-  it('has one credential per sample expert', () => {
-    expect(SAMPLE_EXPERT_CREDENTIALS).toHaveLength(SAMPLE_EXPERTS.length);
+  it('has a credential for every sample expert, plus the workplace review qualification (ADR 0002)', () => {
+    const expertIds = new Set<string>(SAMPLE_EXPERT_CREDENTIALS.map((c) => c.expertId));
+    for (const e of SAMPLE_EXPERTS) expect(expertIds.has(e.id)).toBe(true);
+    const workplace = SAMPLE_EXPERT_CREDENTIALS.filter((c) => c.serviceCategory === 'workplace_review');
+    expect(workplace.map((c) => c.expertId)).toEqual(['expert_psych']);
+    expect(SAMPLE_EXPERT_CREDENTIALS).toHaveLength(SAMPLE_EXPERTS.length + 1);
   });
 
   it('every credential has status APPROVED', () => {

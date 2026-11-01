@@ -104,8 +104,26 @@ async function upsertById<TTable extends TableWithId>(
  */
 export const EXTRA_SAMPLE_TEMPLATES: Readonly<Record<string, readonly string[]>> = {
   // The approver template makes her the sample follow-up approver (T-CW-1.5).
-  user_ivana: ['employer_owner', 'approver'],
+  // Employee listening (ADR 0002): she administers surveys, requests and
+  // approves workplace reviews and is the alternate feedback handler.
+  user_ivana: [
+    'employer_owner',
+    'approver',
+    'survey_administrator',
+    'workplace_review_requester',
+    'workplace_review_approver',
+    'feedback_handler',
+  ],
+  // The primary feedback handler of the sample organization.
+  user_stefan: ['feedback_handler'],
+  // The qualified workplace reviewer (with the `workplace_review` credential).
+  user_milica: ['workplace_reviewer'],
+  // Coordinates workplace reviews and administers listening configuration.
+  user_nikola: ['review_coordinator', 'listening_administrator'],
 };
+
+/** The sample approver's ceiling for a workplace review scope: 5,000 EUR (mirrors `SAMPLE_REVIEW_APPROVER_CEILING` of the fixtures). */
+export const SAMPLE_REVIEW_APPROVER_CEILING = { type: 'spending_ceiling', amountMinor: 500_000, currency: 'EUR' } as const;
 
 /** Ids of the grants created from `EXTRA_SAMPLE_TEMPLATES`. */
 export const extraSampleGrantIds = (): string[] =>
@@ -1241,13 +1259,15 @@ export function templatesForLegacyRoles(
 
 /**
  * Conditions a derived grant carries: the expert template is limited to the
- * expert's approved service categories. Null when there are none.
+ * expert's approved service categories; the workplace review approver carries
+ * the sample spending ceiling (its required condition). Null when there are none.
  */
 export async function derivedGrantConditions(
   db: Database,
   tmpl: PermissionTemplateDefinition,
   userId: string,
 ): Promise<unknown[] | null> {
+  if (tmpl.key === 'workplace_review_approver') return [SAMPLE_REVIEW_APPROVER_CEILING];
   if (tmpl.scopeType !== 'assigned_cases' || tmpl.key !== 'expert') return null;
   const expert = await db.query.experts.findFirst({
     where: eq(t.experts.userId, userId),

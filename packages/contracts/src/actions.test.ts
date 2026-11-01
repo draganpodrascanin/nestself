@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ACTIONS, ACTION_LIST, isAction, CONFIDENTIAL_ACTIONS, APPROVAL_ACTIONS } from './actions.ts';
 
 describe('actions', () => {
-  it('has exactly 113 actions in the catalogue', () => {
-    expect(Object.keys(ACTIONS)).toHaveLength(113);
+  it('has exactly 132 actions in the catalogue', () => {
+    expect(Object.keys(ACTIONS)).toHaveLength(132);
   });
 
   it('contains the sixteen CMS actions (ACC-R-01)', () => {
@@ -24,7 +24,30 @@ describe('actions', () => {
     for (const a of ['intake.queue.view', 'intake.claim', 'intake.reassign'] as const) {
       expect(CONFIDENTIAL_ACTIONS).not.toContain(a);
     }
-    expect(CONFIDENTIAL_ACTIONS).toHaveLength(6);
+    expect(CONFIDENTIAL_ACTIONS).toHaveLength(11);
+  });
+
+  it('includes the employee listening, feedback case and workplace review actions (ADR 0002)', () => {
+    for (const a of [
+      'listening.configure', 'listening.templates.write', 'listening.templates.publish',
+      'listening.cycles.manage', 'listening.respond.self', 'listening.reports.read', 'listening.reports.export',
+      'feedback_case.create.self', 'feedback_case.read.self', 'feedback_case.reply.self',
+      'feedback_case.handle', 'feedback_case.assign',
+      'workplace_reviews.request', 'workplace_reviews.coordinate', 'workplace_reviews.scope.accept',
+      'workplace_reviews.engagement.read', 'workplace_reviews.report.write',
+      'workplace_reviews.report.publish', 'workplace_reviews.actions.manage',
+    ]) {
+      expect(isAction(a), a).toBe(true);
+    }
+  });
+
+  it('every feedback case action is confidential and no listening or review action is', () => {
+    for (const a of ['feedback_case.create.self', 'feedback_case.read.self', 'feedback_case.reply.self', 'feedback_case.handle', 'feedback_case.assign'] as const) {
+      expect(CONFIDENTIAL_ACTIONS).toContain(a);
+    }
+    for (const a of CONFIDENTIAL_ACTIONS) {
+      expect(a.startsWith('listening.') || a.startsWith('workplace_reviews.')).toBe(false);
+    }
   });
 
   it('includes the event actions of NS-CALLS-01 (decision record section 7)', () => {

@@ -145,6 +145,31 @@ export const ACTIONS = {
   'account.help': 'account.help',
   'diagnostic.read': 'diagnostic.read',
 
+  // Employee listening: surveys, reporting and configuration (ADR 0002)
+  'listening.configure': 'listening.configure',
+  'listening.templates.write': 'listening.templates.write',
+  'listening.templates.publish': 'listening.templates.publish',
+  'listening.cycles.manage': 'listening.cycles.manage',
+  'listening.respond.self': 'listening.respond.self',
+  'listening.reports.read': 'listening.reports.read',
+  'listening.reports.export': 'listening.reports.export',
+
+  // Organizational feedback cases (restricted domain, ADR 0002 D-EL-06)
+  'feedback_case.create.self': 'feedback_case.create.self',
+  'feedback_case.read.self': 'feedback_case.read.self',
+  'feedback_case.reply.self': 'feedback_case.reply.self',
+  'feedback_case.handle': 'feedback_case.handle',
+  'feedback_case.assign': 'feedback_case.assign',
+
+  // Workplace reviews: the separately requested professional service (ADR 0002)
+  'workplace_reviews.request': 'workplace_reviews.request',
+  'workplace_reviews.coordinate': 'workplace_reviews.coordinate',
+  'workplace_reviews.scope.accept': 'workplace_reviews.scope.accept',
+  'workplace_reviews.engagement.read': 'workplace_reviews.engagement.read',
+  'workplace_reviews.report.write': 'workplace_reviews.report.write',
+  'workplace_reviews.report.publish': 'workplace_reviews.report.publish',
+  'workplace_reviews.actions.manage': 'workplace_reviews.actions.manage',
+
   // Personal
   'preferences.manage': 'preferences.manage',
   'feedback.submit': 'feedback.submit',
@@ -175,6 +200,14 @@ export const CONFIDENTIAL_ACTIONS: readonly Action[] = [
   'records.read.emergency',
   'intake.respond',
   'intake.permission.request',
+  // Organizational feedback cases: every case is a confidential resource; only
+  // these actions reach it (reporter through `own`, handler through a CASE
+  // assignment). ADR 0002, D-EL-01 and D-EL-06.
+  'feedback_case.create.self',
+  'feedback_case.read.self',
+  'feedback_case.reply.self',
+  'feedback_case.handle',
+  'feedback_case.assign',
 ] as const;
 
 /**
