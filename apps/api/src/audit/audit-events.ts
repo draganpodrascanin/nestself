@@ -133,6 +133,24 @@ export const AUDIT_ACTIONS = [
   'webinar.recording.failed',
   'webinar.attendance.viewed',
   'webinar.certificate.issued',
+  // Employee listening (ADR 0002; spec CFG-01, CFG-03, SUR-01..04, REP, REV-01).
+  // Details carry ids, versions, counts and field names: never an answer, a
+  // participant or a score of a hidden cell.
+  'listening.configuration.changed',
+  'listening.questionnaire.created',
+  'listening.questionnaire.updated',
+  'listening.questionnaire.submitted',
+  'listening.questionnaire.published',
+  'listening.questionnaire.archived',
+  'listening.cycle.scheduled',
+  'listening.cycle.launched',
+  'listening.cycle.canceled',
+  'listening.cycle.finalized',
+  'listening.cycle.failed',
+  'listening.reminders.sent',
+  'listening.report.read',
+  'listening.export.generated',
+  'listening.offer.dismissed',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -189,6 +207,10 @@ function resolveCategory(action: AuditAction): AuditCategory {
     return 'CONTENT_ACCESS';
   }
   if (action.startsWith('webinar.')) return 'ADMIN';
+  // Employee listening (ADR 0002): reads of protected reports and exports are
+  // content access; configuration, questionnaire and cycle changes are admin.
+  if (action === 'listening.report.read' || action === 'listening.export.generated') return 'CONTENT_ACCESS';
+  if (action.startsWith('listening.')) return 'ADMIN';
   // Exhaustive fallback — should never be reached.
   return 'ADMIN';
 }

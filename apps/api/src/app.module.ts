@@ -43,6 +43,7 @@ import { WebinarsModule } from './webinars/webinars.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
 import { SsoModule } from './sso/sso.module.js';
 import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
+import { ListeningModule } from './listening/listening.module.js';
 
 @Module({
   imports: [
@@ -113,6 +114,7 @@ import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
     MediaModule.register(),
     CmsModule,
     LibraryModule,
+    ListeningModule,
   ],
   providers: [
     { provide: APP_GUARD, useExisting: AuthenticationGuard },

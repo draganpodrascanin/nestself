@@ -72,6 +72,11 @@ import {
   toDbSessionStatus,
 } from '../../calls/call-mapper.js';
 import { RETENTION_POLICIES } from './retention-policies.js';
+import {
+  PILOT_PRIVACY_NOTICE,
+  PILOT_QUESTIONNAIRE_DIMENSIONS,
+  SAMPLE_QUESTIONNAIRE_V1_ID,
+} from '../../listening/listening-defaults.js';
 import { buildClosureRows } from '../../org-units/closure.js';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 import type { Database } from '../db.service.js';
@@ -482,6 +487,57 @@ export async function seed(db: Database, options: SeedOptions = {}): Promise<Rec
   }
 
   await seedContentResources(db);
+
+  // ── Employee listening (ADR 0002, D-EL-08): questionnaire version 1 and the sample client's configuration ──
+  const listeningAdmin = SAMPLE_PEOPLE.find((p) => p.platformRole === 'admin') ?? hrAdmin;
+  if (listeningAdmin) {
+    await upsertById(
+      db,
+      t.questionnaireVersions,
+      {
+        id: SAMPLE_QUESTIONNAIRE_V1_ID,
+        version: 1,
+        status: 'published',
+        dimensions: [...PILOT_QUESTIONNAIRE_DIMENSIONS],
+        notice: PILOT_PRIVACY_NOTICE,
+        comparableWithVersionId: null,
+        createdByUserId: listeningAdmin.id,
+        publishedByUserId: listeningAdmin.id,
+        publishedAt: SAMPLE_START_DATE,
+      },
+      { dimensions: [...PILOT_QUESTIONNAIRE_DIMENSIONS], notice: PILOT_PRIVACY_NOTICE },
+    );
+    const listeningConfig = {
+      measurementFrom: SAMPLE_START_DATE,
+      feedbackFrom: SAMPLE_START_DATE,
+      workplaceReviewsFrom: SAMPLE_START_DATE,
+      questionnaireVersionId: SAMPLE_QUESTIONNAIRE_V1_ID,
+      updatedByUserId: listeningAdmin.id,
+    };
+    await db
+      .insert(t.listeningConfigurations)
+      .values({ id: `listening_config_${SAMPLE_ORG.id}`, orgId: SAMPLE_ORG.id, ...listeningConfig })
+      .onConflictDoUpdate({ target: t.listeningConfigurations.id, set: listeningConfig });
+    await db
+      .insert(t.listeningPolicyVersions)
+      .values({
+        id: `listening_policy_${SAMPLE_ORG.id}_1`,
+        orgId: SAMPLE_ORG.id,
+        policyVersion: 1,
+        cadenceDays: 14,
+        responseWindowDays: 7,
+        reminderLimit: 2,
+        freshnessDays: 45,
+        minimumCohort: 10,
+        goodThresholdTenths: 750,
+        monitorThresholdTenths: 600,
+        algorithmVersion: 1,
+        questionnaireVersionId: SAMPLE_QUESTIONNAIRE_V1_ID,
+        effectiveFrom: SAMPLE_START_DATE,
+        createdByUserId: listeningAdmin.id,
+      })
+      .onConflictDoNothing({ target: t.listeningPolicyVersions.id });
+  }
 
   // ── Retention policies (deterministic ids; unique keys match the ids) ──
   for (const rp of RETENTION_POLICIES) {
@@ -1335,6 +1391,9 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     webinarPolls: t.webinarPolls,
     webinarPollOptions: t.webinarPollOptions,
     webinarPollResults: t.webinarPollResults,
+    questionnaireVersions: t.questionnaireVersions,
+    listeningConfigurations: t.listeningConfigurations,
+    surveyCycles: t.surveyCycles,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {
