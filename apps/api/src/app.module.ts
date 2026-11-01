@@ -45,6 +45,7 @@ import { SsoModule } from './sso/sso.module.js';
 import { FakeSsoModule, isStubAuthMode } from './auth/fake-sso.module.js';
 import { ListeningModule } from './listening/listening.module.js';
 import { FeedbackCasesModule } from './feedback-cases/feedback-cases.module.js';
+import { WorkplaceReviewsModule } from './workplace-reviews/workplace-reviews.module.js';
 
 @Module({
   imports: [
@@ -117,6 +118,7 @@ import { FeedbackCasesModule } from './feedback-cases/feedback-cases.module.js';
     LibraryModule,
     ListeningModule,
     FeedbackCasesModule,
+    WorkplaceReviewsModule,
   ],
   providers: [
     { provide: APP_GUARD, useExisting: AuthenticationGuard },

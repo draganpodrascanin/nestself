@@ -3,10 +3,10 @@
  * invitation to request a workplace review (spec 4.5, REV-01). Every
  * condition is evaluated on the server from the protected result; the client
  * renders what it receives. Active requests and engagements come from the
- * workplace-reviews module once it exists (`ACTIVE_REVIEW_LOOKUP`); until then
- * the lookup answers none.
+ * workplace-reviews module, which binds its repository at start-up
+ * (`bindActiveReviewLookup`); unbound, the lookup answers none.
  */
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import type { ListeningDimensionKey, Principal, ReviewOffer } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuthorizationService } from '../authz/authorization.service.js';
@@ -18,7 +18,16 @@ export interface ActiveReviewLookup {
   findActive(orgId: string, cohortKey: string): Promise<{ requestId: string | null; engagementId: string | null }>;
 }
 
-export const ACTIVE_REVIEW_LOOKUP = Symbol('ACTIVE_REVIEW_LOOKUP');
+let activeReviewLookup: ActiveReviewLookup | null = null;
+
+/**
+ * Called by `WorkplaceReviewsModule` on init (its repository) and on destroy
+ * (null): a module-level binding like the resource resolvers, so the two
+ * modules need not import each other.
+ */
+export function bindActiveReviewLookup(next: ActiveReviewLookup | null): void {
+  activeReviewLookup = next;
+}
 
 export interface OfferContext {
   orgId: string;
@@ -37,7 +46,6 @@ export class ReviewOfferService {
   constructor(
     private readonly repo: ListeningRepository,
     private readonly authz: AuthorizationService,
-    @Optional() @Inject(ACTIVE_REVIEW_LOOKUP) private readonly activeReviews: ActiveReviewLookup | null = null,
   ) {}
 
   /** Null when the capability is off; otherwise the offer with every condition resolved. */
@@ -49,7 +57,7 @@ export class ReviewOfferService {
     const [mayRequest, dismissed, active] = await Promise.all([
       this.authz.allows(principal, 'workplace_reviews.request', { type: 'workplace_review', orgId: ctx.orgId }),
       this.repo.findDismissal(ctx.snapshotId, principal.userId),
-      this.activeReviews?.findActive(ctx.orgId, ctx.cohortKey) ?? Promise.resolve({ requestId: null, engagementId: null }),
+      activeReviewLookup?.findActive(ctx.orgId, ctx.cohortKey) ?? Promise.resolve({ requestId: null, engagementId: null }),
     ]);
     return {
       eligible: mayRequest && !ctx.stale && dangerKeys.length > 0 && active.requestId === null && active.engagementId === null && !dismissed,

@@ -13,6 +13,10 @@ import * as appointmentNoShowFollowup from './appointment-no-show-followup.js';
 import * as appointmentReminder from './appointment-reminder.js';
 import * as feedbackCaseAssigned from './feedback-case-assigned.js';
 import * as feedbackCaseUpdate from './feedback-case-update.js';
+import * as reviewBooked from './review-booked.js';
+import * as reviewReportShared from './review-report-shared.js';
+import * as reviewRequestUpdate from './review-request-update.js';
+import * as reviewScopeSent from './review-scope-sent.js';
 import * as approvalDecided from './approval-decided.js';
 import * as approvalReminder from './approval-reminder.js';
 import * as approvalRequested from './approval-requested.js';
@@ -55,6 +59,11 @@ export const mailTemplates = {
   // Feedback cases (spec FBK-02): neutral notices with an authenticated link, never case content.
   feedback_case_assigned: feedbackCaseAssigned,
   feedback_case_update: feedbackCaseUpdate,
+  // Workplace reviews (spec OPS-01): request updates, the scope to accept, the booked meeting and the shared report.
+  review_request_update: reviewRequestUpdate,
+  review_scope_sent: reviewScopeSent,
+  review_booked: reviewBooked,
+  review_report_shared: reviewReportShared,
 } as const;
 
 export type MailTemplateName = keyof typeof mailTemplates;

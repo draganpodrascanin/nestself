@@ -163,6 +163,31 @@ export const AUDIT_ACTIONS = [
   'feedback_case.state_changed',
   'feedback_case.reassigned',
   'feedback_case.escalated',
+  // Workplace reviews (ADR 0002; spec Epics G and H). Details carry ids,
+  // versions, statuses and amounts: never a report body, a note or a score.
+  'workplace_review.requested',
+  'workplace_review.triaged',
+  'workplace_review.declined',
+  'workplace_review.request_canceled',
+  'workplace_review.scope_sent',
+  'workplace_review.scope_accepted',
+  'workplace_review.scope_rejected',
+  'workplace_review.engagement_created',
+  'workplace_review.reviewer_assigned',
+  'workplace_review.windows_proposed',
+  'workplace_review.appointment_booked',
+  'workplace_review.canceled',
+  'workplace_review.sharing_granted',
+  'workplace_review.sharing_revoked',
+  'workplace_review.pack_read',
+  'workplace_review.report_saved',
+  'workplace_review.report_shared',
+  'workplace_review.report_read',
+  'workplace_review.action_created',
+  'workplace_review.action_updated',
+  'workplace_review.follow_up_planned',
+  'workplace_review.completed',
+  'workplace_review.note_added',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -226,6 +251,10 @@ function resolveCategory(action: AuditAction): AuditCategory {
   // Feedback cases: a handler opening a case is content access; the rest is case administration.
   if (action === 'feedback_case.read') return 'CONTENT_ACCESS';
   if (action.startsWith('feedback_case.') || action.startsWith('feedback_route.')) return 'ADMIN';
+  // Workplace reviews: accepting a scope is a financial decision; reading a pack or a report is content access.
+  if (action === 'workplace_review.scope_accepted') return 'FINANCIAL';
+  if (action === 'workplace_review.pack_read' || action === 'workplace_review.report_read') return 'CONTENT_ACCESS';
+  if (action.startsWith('workplace_review.')) return 'ADMIN';
   // Exhaustive fallback — should never be reached.
   return 'ADMIN';
 }

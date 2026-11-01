@@ -408,3 +408,34 @@ export const feedbackCaseState = pgEnum('feedback_case_state', [
 
 /** Who wrote a case message: the reporter (never identified), a handler, or the system. */
 export const feedbackMessageSender = pgEnum('feedback_message_sender', ['reporter', 'handler', 'system']);
+
+/** Workplace review request lifecycle (ADR 0002, spec section 8). */
+export const reviewRequestStatus = pgEnum('review_request_status', [
+  'submitted',
+  'needs_information',
+  'in_review',
+  'scoped',
+  'converted',
+  'declined',
+  'canceled',
+]);
+
+/** A versioned scope (quote) lifecycle: acceptance binds one immutable version (spec REV-05). */
+export const reviewScopeStatus = pgEnum('review_scope_status', ['draft', 'sent', 'accepted', 'rejected', 'expired', 'superseded']);
+
+/** Professional engagement lifecycle (spec section 8): completion is independent of score colour. */
+export const reviewEngagementStatus = pgEnum('review_engagement_status', [
+  'accepted',
+  'scheduled',
+  'in_progress',
+  'report_shared',
+  'follow_up',
+  'completed',
+  'canceled',
+]);
+
+/** Review report version lifecycle (spec REV-07): a shared version does not mutate. */
+export const reviewReportStatus = pgEnum('review_report_status', ['draft', 'in_review', 'shared', 'superseded']);
+
+/** Agreed action lifecycle (spec REV-08): a proposal becomes an action only through explicit agreement. */
+export const improvementActionStatus = pgEnum('improvement_action_status', ['proposed', 'agreed', 'in_progress', 'completed', 'not_proceeding']);

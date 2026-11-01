@@ -124,6 +124,14 @@ const samples: { [T in MailTemplateName]: MailTemplateData<T> } = {
     pseudonym: 'Reporter-AB2C',
     caseUrl: 'https://app.nestself.rs/feedback/cases/case_1',
   },
+  review_request_update: { organizationName: 'Example d.o.o.', status: 'in_review', requestUrl: 'https://app.nestself.rs/listening/reviews/req_1' },
+  review_scope_sent: { organizationName: 'Example d.o.o.', validUntil: '2026-11-20T09:00:00.000Z', timeZone: 'Europe/Belgrade', requestUrl: 'https://app.nestself.rs/listening/reviews/req_1' },
+  review_booked: {
+    organizationName: 'Example d.o.o.',
+    appointment: { id: 'appt_1', startsAt: '2026-11-12T09:00:00.000Z', endsAt: '2026-11-12T10:30:00.000Z', timeZone: 'Europe/Belgrade' },
+    engagementUrl: 'https://app.nestself.rs/listening/reviews/engagements/eng_1',
+  },
+  review_report_shared: { organizationName: 'Example d.o.o.', engagementUrl: 'https://app.nestself.rs/listening/reviews/engagements/eng_1' },
 };
 
 /** The sender the tests render with: ORGANIZER of every calendar file. */
@@ -160,6 +168,10 @@ describe('mail templates', () => {
         'feedback_case_update',
         'invitation',
         'ops_certificate_alert',
+        'review_booked',
+        'review_report_shared',
+        'review_request_update',
+        'review_scope_sent',
         'sso_bind_code',
         'step_up_code',
         'survey_invitation',

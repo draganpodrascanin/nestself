@@ -129,6 +129,56 @@ export const EXTRA_SAMPLE_TEMPLATES: Readonly<Record<string, readonly string[]>>
   user_nikola: ['review_coordinator', 'listening_administrator'],
 };
 
+/** The review service catalogue the seed installs (ids are stable so the sample fixtures can name them). */
+export const REVIEW_SERVICE_SEED = [
+  {
+    id: 'review_service_workplace_review',
+    key: 'workplace_review',
+    name: { en: 'Workplace review', 'sr-Latn': 'Pregled radnog okruženja', 'sr-Cyrl': 'Преглед радног окружења', hu: 'Munkahelyi átvilágítás' },
+    description: {
+      en: 'A qualified reviewer assesses the shared results with you and writes a report with findings and practical proposals. Scoped and priced per request.',
+      'sr-Latn': 'Kvalifikovani stručnjak sa vama procenjuje podeljene rezultate i piše izveštaj sa nalazima i praktičnim predlozima. Obim i cena se određuju po zahtevu.',
+      'sr-Cyrl': 'Квалификовани стручњак са вама процењује подељене резултате и пише извештај са налазима и практичним предлозима. Обим и цена се одређују по захтеву.',
+      hu: 'Egy képzett átvilágító Önnel együtt értékeli a megosztott eredményeket, és jelentést ír megállapításokkal és gyakorlati javaslatokkal. A terjedelem és az ár kérésenként kerül meghatározásra.',
+    },
+    durationMinutes: 90,
+    priceMinor: null,
+    currency: 'EUR',
+    introductory: false,
+    termsVersion: '2026-11',
+    termsText: {
+      en: 'Professional services are scoped and quoted per request; a quote binds once accepted by an authorized approver. Cancellation follows the quoted policy.',
+      'sr-Latn': 'Stručne usluge se definišu i nude po zahtevu; ponuda postaje obavezujuća kada je prihvati ovlašćeni odobravalac. Otkazivanje prati navedenu politiku.',
+      'sr-Cyrl': 'Стручне услуге се дефинишу и нуде по захтеву; понуда постаје обавезујућа када је прихвати овлашћени одобравалац. Отказивање прати наведену политику.',
+      hu: 'A szakmai szolgáltatások terjedelme és ára kérésenként kerül meghatározásra; az ajánlat a jogosult jóváhagyó elfogadásával válik kötelezővé. A lemondás az ajánlatban rögzített szabályt követi.',
+    },
+    isActive: true,
+  },
+  {
+    id: 'review_service_introductory_call',
+    key: 'introductory_call',
+    name: { en: 'Introductory call', 'sr-Latn': 'Uvodni razgovor', 'sr-Cyrl': 'Уводни разговор', hu: 'Bevezető beszélgetés' },
+    description: {
+      en: 'A free 30-minute call to understand the results and the next steps. No report and no commitment.',
+      'sr-Latn': 'Besplatan razgovor od 30 minuta o rezultatima i sledećim koracima. Bez izveštaja i bez obaveze.',
+      'sr-Cyrl': 'Бесплатан разговор од 30 минута о резултатима и следећим корацима. Без извештаја и без обавезе.',
+      hu: 'Ingyenes 30 perces beszélgetés az eredményekről és a következő lépésekről. Jelentés és kötelezettség nélkül.',
+    },
+    durationMinutes: 30,
+    priceMinor: 0,
+    currency: 'EUR',
+    introductory: true,
+    termsVersion: '2026-11',
+    termsText: {
+      en: 'The introductory call is free of charge and creates no obligation.',
+      'sr-Latn': 'Uvodni razgovor je besplatan i ne stvara obavezu.',
+      'sr-Cyrl': 'Уводни разговор је бесплатан и не ствара обавезу.',
+      hu: 'A bevezető beszélgetés díjmentes, és nem jár kötelezettséggel.',
+    },
+    isActive: true,
+  },
+] as const;
+
 /** The sample approver's ceiling for a workplace review scope: 5,000 EUR (mirrors `SAMPLE_REVIEW_APPROVER_CEILING` of the fixtures). */
 export const SAMPLE_REVIEW_APPROVER_CEILING = { type: 'spending_ceiling', amountMinor: 500_000, currency: 'EUR' } as const;
 
@@ -561,6 +611,13 @@ export async function seed(db: Database, options: SeedOptions = {}): Promise<Rec
       .insert(t.feedbackRoutes)
       .values({ id: `feedback_route_${SAMPLE_ORG.id}_standard`, ...standardRoute })
       .onConflictDoUpdate({ target: t.feedbackRoutes.id, set: standardRoute });
+  }
+
+  // ── Review services (ADR 0002, D-EL-04; spec REV-02, REV-05): the quoted
+  // workplace review and the explicitly free introductory call.
+  for (const service of REVIEW_SERVICE_SEED) {
+    const { id, ...values } = service;
+    await db.insert(t.reviewServices).values({ id, ...values }).onConflictDoUpdate({ target: t.reviewServices.id, set: values });
   }
 
   // ── Retention policies (deterministic ids; unique keys match the ids) ──
@@ -1422,6 +1479,8 @@ async function countAll(db: Database): Promise<Record<string, number>> {
     surveyCycles: t.surveyCycles,
     feedbackRoutes: t.feedbackRoutes,
     feedbackCases: t.feedbackCases,
+    reviewServices: t.reviewServices,
+    reviewRequests: t.reviewRequests,
   };
   const counts: Record<string, number> = {};
   for (const [name, table] of Object.entries(tables)) {
