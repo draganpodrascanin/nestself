@@ -14,11 +14,13 @@ import { Route as PublicRouteImport } from './routes/_public'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedExpertRouteImport } from './routes/_authenticated/_expert'
 import { Route as AuthenticatedHrRouteImport } from './routes/_authenticated/_hr'
+import { Route as AuthenticatedListeningRouteImport } from './routes/_authenticated/_listening'
 import { Route as AuthenticatedManagerRouteImport } from './routes/_authenticated/_manager'
 import { Route as AuthenticatedConversationsRouteRouteImport } from './routes/_authenticated/conversations/route'
 import { Route as AuthenticatedRequestsRouteImport } from './routes/_authenticated/requests'
 import { Route as AuthenticatedSavedRouteImport } from './routes/_authenticated/saved'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedSurveyRouteImport } from './routes/_authenticated/survey'
 import { Route as PublicResetPasswordRouteImport } from './routes/_public/reset-password'
 import { Route as PublicSignInRouteImport } from './routes/_public/sign-in'
 import { Route as CallAppointmentIdRouteImport } from './routes/call/$appointmentId'
@@ -32,6 +34,7 @@ import { Route as AuthenticatedContentContentIdRouteImport } from './routes/_aut
 import { Route as AuthenticatedConversationsIndexRouteImport } from './routes/_authenticated/conversations/index'
 import { Route as AuthenticatedConversationsIdRouteImport } from './routes/_authenticated/conversations/$id'
 import { Route as AuthenticatedExploreIndexRouteImport } from './routes/_authenticated/explore/index'
+import { Route as AuthenticatedFeedbackNewRouteImport } from './routes/_authenticated/feedback/new'
 import { Route as AuthenticatedHrAccessRouteImport } from './routes/_authenticated/hr/access'
 import { Route as AuthenticatedMessagesIndexRouteImport } from './routes/_authenticated/messages/index'
 import { Route as AuthenticatedMessagesThreadIdRouteImport } from './routes/_authenticated/messages/$threadId'
@@ -49,10 +52,19 @@ import { Route as AuthenticatedHrHrEventsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedHrHrOrgUnitsRouteImport } from './routes/_authenticated/_hr/hr/org-units'
 import { Route as AuthenticatedHrHrPeopleRouteImport } from './routes/_authenticated/_hr/hr/people'
 import { Route as AuthenticatedHrHrReportsRouteImport } from './routes/_authenticated/_hr/hr/reports'
+import { Route as AuthenticatedListeningListeningIndexRouteImport } from './routes/_authenticated/_listening/listening/index'
+import { Route as AuthenticatedListeningListeningHeatmapRouteImport } from './routes/_authenticated/_listening/listening/heatmap'
+import { Route as AuthenticatedListeningListeningSettingsRouteImport } from './routes/_authenticated/_listening/listening/settings'
+import { Route as AuthenticatedListeningListeningSurveysRouteImport } from './routes/_authenticated/_listening/listening/surveys'
 import { Route as AuthenticatedManagerManageIndexRouteImport } from './routes/_authenticated/_manager/manage/index'
 import { Route as AuthenticatedWebinarsWebinarIdLiveRouteImport } from './routes/_authenticated/webinars/$webinarId.live'
+import { Route as AuthenticatedListeningListeningDimensionsKeyRouteImport } from './routes/_authenticated/_listening/listening/dimensions.$key'
+import { Route as AuthenticatedListeningListeningReviewsIndexRouteImport } from './routes/_authenticated/_listening/listening/reviews/index'
+import { Route as AuthenticatedListeningListeningReviewsRequestIdRouteImport } from './routes/_authenticated/_listening/listening/reviews/$requestId'
+import { Route as AuthenticatedListeningListeningReviewsNewRouteImport } from './routes/_authenticated/_listening/listening/reviews/new'
 import { Route as AuthenticatedManagerManageEventsNewRouteImport } from './routes/_authenticated/_manager/manage/events.new'
 import { Route as AuthenticatedManagerManagePollsNewRouteImport } from './routes/_authenticated/_manager/manage/polls.new'
+import { Route as AuthenticatedListeningListeningReviewsEngagementsEngagementIdRouteImport } from './routes/_authenticated/_listening/listening/reviews/engagements.$engagementId'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
@@ -73,6 +85,10 @@ const AuthenticatedExpertRoute = AuthenticatedExpertRouteImport.update({
 } as any)
 const AuthenticatedHrRoute = AuthenticatedHrRouteImport.update({
   id: '/_hr',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedListeningRoute = AuthenticatedListeningRouteImport.update({
+  id: '/_listening',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedManagerRoute = AuthenticatedManagerRouteImport.update({
@@ -98,6 +114,11 @@ const AuthenticatedSavedRoute = AuthenticatedSavedRouteImport.update({
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSurveyRoute = AuthenticatedSurveyRouteImport.update({
+  id: '/survey',
+  path: '/survey',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const PublicResetPasswordRoute = PublicResetPasswordRouteImport.update({
@@ -173,6 +194,12 @@ const AuthenticatedExploreIndexRoute =
   AuthenticatedExploreIndexRouteImport.update({
     id: '/explore/',
     path: '/explore/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFeedbackNewRoute =
+  AuthenticatedFeedbackNewRouteImport.update({
+    id: '/feedback/new',
+    path: '/feedback/new',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedHrAccessRoute = AuthenticatedHrAccessRouteImport.update({
@@ -271,6 +298,30 @@ const AuthenticatedHrHrReportsRoute =
     path: '/hr/reports',
     getParentRoute: () => AuthenticatedHrRoute,
   } as any)
+const AuthenticatedListeningListeningIndexRoute =
+  AuthenticatedListeningListeningIndexRouteImport.update({
+    id: '/listening/',
+    path: '/listening/',
+    getParentRoute: () => AuthenticatedListeningRoute,
+  } as any)
+const AuthenticatedListeningListeningHeatmapRoute =
+  AuthenticatedListeningListeningHeatmapRouteImport.update({
+    id: '/listening/heatmap',
+    path: '/listening/heatmap',
+    getParentRoute: () => AuthenticatedListeningRoute,
+  } as any)
+const AuthenticatedListeningListeningSettingsRoute =
+  AuthenticatedListeningListeningSettingsRouteImport.update({
+    id: '/listening/settings',
+    path: '/listening/settings',
+    getParentRoute: () => AuthenticatedListeningRoute,
+  } as any)
+const AuthenticatedListeningListeningSurveysRoute =
+  AuthenticatedListeningListeningSurveysRouteImport.update({
+    id: '/listening/surveys',
+    path: '/listening/surveys',
+    getParentRoute: () => AuthenticatedListeningRoute,
+  } as any)
 const AuthenticatedManagerManageIndexRoute =
   AuthenticatedManagerManageIndexRouteImport.update({
     id: '/manage/',
@@ -282,6 +333,30 @@ const AuthenticatedWebinarsWebinarIdLiveRoute =
     id: '/live',
     path: '/live',
     getParentRoute: () => AuthenticatedWebinarsWebinarIdRoute,
+  } as any)
+const AuthenticatedListeningListeningDimensionsKeyRoute =
+  AuthenticatedListeningListeningDimensionsKeyRouteImport.update({
+    id: '/listening/dimensions/$key',
+    path: '/listening/dimensions/$key',
+    getParentRoute: () => AuthenticatedListeningRoute,
+  } as any)
+const AuthenticatedListeningListeningReviewsIndexRoute =
+  AuthenticatedListeningListeningReviewsIndexRouteImport.update({
+    id: '/listening/reviews/',
+    path: '/listening/reviews/',
+    getParentRoute: () => AuthenticatedListeningRoute,
+  } as any)
+const AuthenticatedListeningListeningReviewsRequestIdRoute =
+  AuthenticatedListeningListeningReviewsRequestIdRouteImport.update({
+    id: '/listening/reviews/$requestId',
+    path: '/listening/reviews/$requestId',
+    getParentRoute: () => AuthenticatedListeningRoute,
+  } as any)
+const AuthenticatedListeningListeningReviewsNewRoute =
+  AuthenticatedListeningListeningReviewsNewRouteImport.update({
+    id: '/listening/reviews/new',
+    path: '/listening/reviews/new',
+    getParentRoute: () => AuthenticatedListeningRoute,
   } as any)
 const AuthenticatedManagerManageEventsNewRoute =
   AuthenticatedManagerManageEventsNewRouteImport.update({
@@ -295,6 +370,14 @@ const AuthenticatedManagerManagePollsNewRoute =
     path: '/manage/polls/new',
     getParentRoute: () => AuthenticatedManagerRoute,
   } as any)
+const AuthenticatedListeningListeningReviewsEngagementsEngagementIdRoute =
+  AuthenticatedListeningListeningReviewsEngagementsEngagementIdRouteImport.update(
+    {
+      id: '/listening/reviews/engagements/$engagementId',
+      path: '/listening/reviews/engagements/$engagementId',
+      getParentRoute: () => AuthenticatedListeningRoute,
+    } as any,
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -302,6 +385,7 @@ export interface FileRoutesByFullPath {
   '/requests': typeof AuthenticatedRequestsRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/survey': typeof AuthenticatedSurveyRoute
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
   '/call/$appointmentId': typeof CallAppointmentIdRoute
@@ -310,6 +394,7 @@ export interface FileRoutesByFullPath {
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/conversations/$id': typeof AuthenticatedConversationsIdRoute
+  '/feedback/new': typeof AuthenticatedFeedbackNewRoute
   '/hr/access': typeof AuthenticatedHrAccessRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
@@ -330,18 +415,28 @@ export interface FileRoutesByFullPath {
   '/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
   '/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/listening/heatmap': typeof AuthenticatedListeningListeningHeatmapRoute
+  '/listening/settings': typeof AuthenticatedListeningListeningSettingsRoute
+  '/listening/surveys': typeof AuthenticatedListeningListeningSurveysRoute
   '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/cases/': typeof AuthenticatedExpertCasesIndexRoute
   '/hr/': typeof AuthenticatedHrHrIndexRoute
+  '/listening/': typeof AuthenticatedListeningListeningIndexRoute
   '/manage/': typeof AuthenticatedManagerManageIndexRoute
+  '/listening/dimensions/$key': typeof AuthenticatedListeningListeningDimensionsKeyRoute
+  '/listening/reviews/$requestId': typeof AuthenticatedListeningListeningReviewsRequestIdRoute
+  '/listening/reviews/new': typeof AuthenticatedListeningListeningReviewsNewRoute
   '/manage/events/new': typeof AuthenticatedManagerManageEventsNewRoute
   '/manage/polls/new': typeof AuthenticatedManagerManagePollsNewRoute
+  '/listening/reviews/': typeof AuthenticatedListeningListeningReviewsIndexRoute
+  '/listening/reviews/engagements/$engagementId': typeof AuthenticatedListeningListeningReviewsEngagementsEngagementIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/requests': typeof AuthenticatedRequestsRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/survey': typeof AuthenticatedSurveyRoute
   '/reset-password': typeof PublicResetPasswordRoute
   '/sign-in': typeof PublicSignInRoute
   '/call/$appointmentId': typeof CallAppointmentIdRoute
@@ -350,6 +445,7 @@ export interface FileRoutesByTo {
   '/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/conversations/$id': typeof AuthenticatedConversationsIdRoute
+  '/feedback/new': typeof AuthenticatedFeedbackNewRoute
   '/hr/access': typeof AuthenticatedHrAccessRoute
   '/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/support/$area': typeof AuthenticatedSupportAreaRoute
@@ -370,12 +466,21 @@ export interface FileRoutesByTo {
   '/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
   '/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/listening/heatmap': typeof AuthenticatedListeningListeningHeatmapRoute
+  '/listening/settings': typeof AuthenticatedListeningListeningSettingsRoute
+  '/listening/surveys': typeof AuthenticatedListeningListeningSurveysRoute
   '/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/cases': typeof AuthenticatedExpertCasesIndexRoute
   '/hr': typeof AuthenticatedHrHrIndexRoute
+  '/listening': typeof AuthenticatedListeningListeningIndexRoute
   '/manage': typeof AuthenticatedManagerManageIndexRoute
+  '/listening/dimensions/$key': typeof AuthenticatedListeningListeningDimensionsKeyRoute
+  '/listening/reviews/$requestId': typeof AuthenticatedListeningListeningReviewsRequestIdRoute
+  '/listening/reviews/new': typeof AuthenticatedListeningListeningReviewsNewRoute
   '/manage/events/new': typeof AuthenticatedManagerManageEventsNewRoute
   '/manage/polls/new': typeof AuthenticatedManagerManagePollsNewRoute
+  '/listening/reviews': typeof AuthenticatedListeningListeningReviewsIndexRoute
+  '/listening/reviews/engagements/$engagementId': typeof AuthenticatedListeningListeningReviewsEngagementsEngagementIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -384,10 +489,12 @@ export interface FileRoutesById {
   '/_authenticated/conversations': typeof AuthenticatedConversationsRouteRouteWithChildren
   '/_authenticated/_expert': typeof AuthenticatedExpertRouteWithChildren
   '/_authenticated/_hr': typeof AuthenticatedHrRouteWithChildren
+  '/_authenticated/_listening': typeof AuthenticatedListeningRouteWithChildren
   '/_authenticated/_manager': typeof AuthenticatedManagerRouteWithChildren
   '/_authenticated/requests': typeof AuthenticatedRequestsRoute
   '/_authenticated/saved': typeof AuthenticatedSavedRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/survey': typeof AuthenticatedSurveyRoute
   '/_public/reset-password': typeof PublicResetPasswordRoute
   '/_public/sign-in': typeof PublicSignInRoute
   '/call/$appointmentId': typeof CallAppointmentIdRoute
@@ -397,6 +504,7 @@ export interface FileRoutesById {
   '/_authenticated/channels/$channelId': typeof AuthenticatedChannelsChannelIdRoute
   '/_authenticated/content/$contentId': typeof AuthenticatedContentContentIdRoute
   '/_authenticated/conversations/$id': typeof AuthenticatedConversationsIdRoute
+  '/_authenticated/feedback/new': typeof AuthenticatedFeedbackNewRoute
   '/_authenticated/hr/access': typeof AuthenticatedHrAccessRoute
   '/_authenticated/messages/$threadId': typeof AuthenticatedMessagesThreadIdRoute
   '/_authenticated/support/$area': typeof AuthenticatedSupportAreaRoute
@@ -417,12 +525,21 @@ export interface FileRoutesById {
   '/_authenticated/_hr/hr/org-units': typeof AuthenticatedHrHrOrgUnitsRoute
   '/_authenticated/_hr/hr/people': typeof AuthenticatedHrHrPeopleRoute
   '/_authenticated/_hr/hr/reports': typeof AuthenticatedHrHrReportsRoute
+  '/_authenticated/_listening/listening/heatmap': typeof AuthenticatedListeningListeningHeatmapRoute
+  '/_authenticated/_listening/listening/settings': typeof AuthenticatedListeningListeningSettingsRoute
+  '/_authenticated/_listening/listening/surveys': typeof AuthenticatedListeningListeningSurveysRoute
   '/_authenticated/webinars/$webinarId/live': typeof AuthenticatedWebinarsWebinarIdLiveRoute
   '/_authenticated/_expert/cases/': typeof AuthenticatedExpertCasesIndexRoute
   '/_authenticated/_hr/hr/': typeof AuthenticatedHrHrIndexRoute
+  '/_authenticated/_listening/listening/': typeof AuthenticatedListeningListeningIndexRoute
   '/_authenticated/_manager/manage/': typeof AuthenticatedManagerManageIndexRoute
+  '/_authenticated/_listening/listening/dimensions/$key': typeof AuthenticatedListeningListeningDimensionsKeyRoute
+  '/_authenticated/_listening/listening/reviews/$requestId': typeof AuthenticatedListeningListeningReviewsRequestIdRoute
+  '/_authenticated/_listening/listening/reviews/new': typeof AuthenticatedListeningListeningReviewsNewRoute
   '/_authenticated/_manager/manage/events/new': typeof AuthenticatedManagerManageEventsNewRoute
   '/_authenticated/_manager/manage/polls/new': typeof AuthenticatedManagerManagePollsNewRoute
+  '/_authenticated/_listening/listening/reviews/': typeof AuthenticatedListeningListeningReviewsIndexRoute
+  '/_authenticated/_listening/listening/reviews/engagements/$engagementId': typeof AuthenticatedListeningListeningReviewsEngagementsEngagementIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -432,6 +549,7 @@ export interface FileRouteTypes {
     | '/requests'
     | '/saved'
     | '/settings'
+    | '/survey'
     | '/reset-password'
     | '/sign-in'
     | '/call/$appointmentId'
@@ -440,6 +558,7 @@ export interface FileRouteTypes {
     | '/channels/$channelId'
     | '/content/$contentId'
     | '/conversations/$id'
+    | '/feedback/new'
     | '/hr/access'
     | '/messages/$threadId'
     | '/support/$area'
@@ -460,18 +579,28 @@ export interface FileRouteTypes {
     | '/hr/org-units'
     | '/hr/people'
     | '/hr/reports'
+    | '/listening/heatmap'
+    | '/listening/settings'
+    | '/listening/surveys'
     | '/webinars/$webinarId/live'
     | '/cases/'
     | '/hr/'
+    | '/listening/'
     | '/manage/'
+    | '/listening/dimensions/$key'
+    | '/listening/reviews/$requestId'
+    | '/listening/reviews/new'
     | '/manage/events/new'
     | '/manage/polls/new'
+    | '/listening/reviews/'
+    | '/listening/reviews/engagements/$engagementId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/requests'
     | '/saved'
     | '/settings'
+    | '/survey'
     | '/reset-password'
     | '/sign-in'
     | '/call/$appointmentId'
@@ -480,6 +609,7 @@ export interface FileRouteTypes {
     | '/channels/$channelId'
     | '/content/$contentId'
     | '/conversations/$id'
+    | '/feedback/new'
     | '/hr/access'
     | '/messages/$threadId'
     | '/support/$area'
@@ -500,12 +630,21 @@ export interface FileRouteTypes {
     | '/hr/org-units'
     | '/hr/people'
     | '/hr/reports'
+    | '/listening/heatmap'
+    | '/listening/settings'
+    | '/listening/surveys'
     | '/webinars/$webinarId/live'
     | '/cases'
     | '/hr'
+    | '/listening'
     | '/manage'
+    | '/listening/dimensions/$key'
+    | '/listening/reviews/$requestId'
+    | '/listening/reviews/new'
     | '/manage/events/new'
     | '/manage/polls/new'
+    | '/listening/reviews'
+    | '/listening/reviews/engagements/$engagementId'
   id:
     | '__root__'
     | '/_authenticated'
@@ -513,10 +652,12 @@ export interface FileRouteTypes {
     | '/_authenticated/conversations'
     | '/_authenticated/_expert'
     | '/_authenticated/_hr'
+    | '/_authenticated/_listening'
     | '/_authenticated/_manager'
     | '/_authenticated/requests'
     | '/_authenticated/saved'
     | '/_authenticated/settings'
+    | '/_authenticated/survey'
     | '/_public/reset-password'
     | '/_public/sign-in'
     | '/call/$appointmentId'
@@ -526,6 +667,7 @@ export interface FileRouteTypes {
     | '/_authenticated/channels/$channelId'
     | '/_authenticated/content/$contentId'
     | '/_authenticated/conversations/$id'
+    | '/_authenticated/feedback/new'
     | '/_authenticated/hr/access'
     | '/_authenticated/messages/$threadId'
     | '/_authenticated/support/$area'
@@ -546,12 +688,21 @@ export interface FileRouteTypes {
     | '/_authenticated/_hr/hr/org-units'
     | '/_authenticated/_hr/hr/people'
     | '/_authenticated/_hr/hr/reports'
+    | '/_authenticated/_listening/listening/heatmap'
+    | '/_authenticated/_listening/listening/settings'
+    | '/_authenticated/_listening/listening/surveys'
     | '/_authenticated/webinars/$webinarId/live'
     | '/_authenticated/_expert/cases/'
     | '/_authenticated/_hr/hr/'
+    | '/_authenticated/_listening/listening/'
     | '/_authenticated/_manager/manage/'
+    | '/_authenticated/_listening/listening/dimensions/$key'
+    | '/_authenticated/_listening/listening/reviews/$requestId'
+    | '/_authenticated/_listening/listening/reviews/new'
     | '/_authenticated/_manager/manage/events/new'
     | '/_authenticated/_manager/manage/polls/new'
+    | '/_authenticated/_listening/listening/reviews/'
+    | '/_authenticated/_listening/listening/reviews/engagements/$engagementId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -597,6 +748,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHrRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/_listening': {
+      id: '/_authenticated/_listening'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedListeningRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/_manager': {
       id: '/_authenticated/_manager'
       path: ''
@@ -630,6 +788,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/survey': {
+      id: '/_authenticated/survey'
+      path: '/survey'
+      fullPath: '/survey'
+      preLoaderRoute: typeof AuthenticatedSurveyRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_public/reset-password': {
@@ -721,6 +886,13 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/explore/'
       preLoaderRoute: typeof AuthenticatedExploreIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/feedback/new': {
+      id: '/_authenticated/feedback/new'
+      path: '/feedback/new'
+      fullPath: '/feedback/new'
+      preLoaderRoute: typeof AuthenticatedFeedbackNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/hr/access': {
@@ -842,6 +1014,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHrHrReportsRouteImport
       parentRoute: typeof AuthenticatedHrRoute
     }
+    '/_authenticated/_listening/listening/': {
+      id: '/_authenticated/_listening/listening/'
+      path: '/listening'
+      fullPath: '/listening/'
+      preLoaderRoute: typeof AuthenticatedListeningListeningIndexRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
+    }
+    '/_authenticated/_listening/listening/heatmap': {
+      id: '/_authenticated/_listening/listening/heatmap'
+      path: '/listening/heatmap'
+      fullPath: '/listening/heatmap'
+      preLoaderRoute: typeof AuthenticatedListeningListeningHeatmapRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
+    }
+    '/_authenticated/_listening/listening/settings': {
+      id: '/_authenticated/_listening/listening/settings'
+      path: '/listening/settings'
+      fullPath: '/listening/settings'
+      preLoaderRoute: typeof AuthenticatedListeningListeningSettingsRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
+    }
+    '/_authenticated/_listening/listening/surveys': {
+      id: '/_authenticated/_listening/listening/surveys'
+      path: '/listening/surveys'
+      fullPath: '/listening/surveys'
+      preLoaderRoute: typeof AuthenticatedListeningListeningSurveysRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
+    }
     '/_authenticated/_manager/manage/': {
       id: '/_authenticated/_manager/manage/'
       path: '/manage'
@@ -856,6 +1056,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWebinarsWebinarIdLiveRouteImport
       parentRoute: typeof AuthenticatedWebinarsWebinarIdRoute
     }
+    '/_authenticated/_listening/listening/dimensions/$key': {
+      id: '/_authenticated/_listening/listening/dimensions/$key'
+      path: '/listening/dimensions/$key'
+      fullPath: '/listening/dimensions/$key'
+      preLoaderRoute: typeof AuthenticatedListeningListeningDimensionsKeyRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
+    }
+    '/_authenticated/_listening/listening/reviews/': {
+      id: '/_authenticated/_listening/listening/reviews/'
+      path: '/listening/reviews'
+      fullPath: '/listening/reviews/'
+      preLoaderRoute: typeof AuthenticatedListeningListeningReviewsIndexRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
+    }
+    '/_authenticated/_listening/listening/reviews/$requestId': {
+      id: '/_authenticated/_listening/listening/reviews/$requestId'
+      path: '/listening/reviews/$requestId'
+      fullPath: '/listening/reviews/$requestId'
+      preLoaderRoute: typeof AuthenticatedListeningListeningReviewsRequestIdRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
+    }
+    '/_authenticated/_listening/listening/reviews/new': {
+      id: '/_authenticated/_listening/listening/reviews/new'
+      path: '/listening/reviews/new'
+      fullPath: '/listening/reviews/new'
+      preLoaderRoute: typeof AuthenticatedListeningListeningReviewsNewRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
+    }
     '/_authenticated/_manager/manage/events/new': {
       id: '/_authenticated/_manager/manage/events/new'
       path: '/manage/events/new'
@@ -869,6 +1097,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/manage/polls/new'
       preLoaderRoute: typeof AuthenticatedManagerManagePollsNewRouteImport
       parentRoute: typeof AuthenticatedManagerRoute
+    }
+    '/_authenticated/_listening/listening/reviews/engagements/$engagementId': {
+      id: '/_authenticated/_listening/listening/reviews/engagements/$engagementId'
+      path: '/listening/reviews/engagements/$engagementId'
+      fullPath: '/listening/reviews/engagements/$engagementId'
+      preLoaderRoute: typeof AuthenticatedListeningListeningReviewsEngagementsEngagementIdRouteImport
+      parentRoute: typeof AuthenticatedListeningRoute
     }
   }
 }
@@ -926,6 +1161,45 @@ const AuthenticatedHrRouteWithChildren = AuthenticatedHrRoute._addFileChildren(
   AuthenticatedHrRouteChildren,
 )
 
+interface AuthenticatedListeningRouteChildren {
+  AuthenticatedListeningListeningHeatmapRoute: typeof AuthenticatedListeningListeningHeatmapRoute
+  AuthenticatedListeningListeningSettingsRoute: typeof AuthenticatedListeningListeningSettingsRoute
+  AuthenticatedListeningListeningSurveysRoute: typeof AuthenticatedListeningListeningSurveysRoute
+  AuthenticatedListeningListeningIndexRoute: typeof AuthenticatedListeningListeningIndexRoute
+  AuthenticatedListeningListeningDimensionsKeyRoute: typeof AuthenticatedListeningListeningDimensionsKeyRoute
+  AuthenticatedListeningListeningReviewsRequestIdRoute: typeof AuthenticatedListeningListeningReviewsRequestIdRoute
+  AuthenticatedListeningListeningReviewsNewRoute: typeof AuthenticatedListeningListeningReviewsNewRoute
+  AuthenticatedListeningListeningReviewsIndexRoute: typeof AuthenticatedListeningListeningReviewsIndexRoute
+  AuthenticatedListeningListeningReviewsEngagementsEngagementIdRoute: typeof AuthenticatedListeningListeningReviewsEngagementsEngagementIdRoute
+}
+
+const AuthenticatedListeningRouteChildren: AuthenticatedListeningRouteChildren =
+  {
+    AuthenticatedListeningListeningHeatmapRoute:
+      AuthenticatedListeningListeningHeatmapRoute,
+    AuthenticatedListeningListeningSettingsRoute:
+      AuthenticatedListeningListeningSettingsRoute,
+    AuthenticatedListeningListeningSurveysRoute:
+      AuthenticatedListeningListeningSurveysRoute,
+    AuthenticatedListeningListeningIndexRoute:
+      AuthenticatedListeningListeningIndexRoute,
+    AuthenticatedListeningListeningDimensionsKeyRoute:
+      AuthenticatedListeningListeningDimensionsKeyRoute,
+    AuthenticatedListeningListeningReviewsRequestIdRoute:
+      AuthenticatedListeningListeningReviewsRequestIdRoute,
+    AuthenticatedListeningListeningReviewsNewRoute:
+      AuthenticatedListeningListeningReviewsNewRoute,
+    AuthenticatedListeningListeningReviewsIndexRoute:
+      AuthenticatedListeningListeningReviewsIndexRoute,
+    AuthenticatedListeningListeningReviewsEngagementsEngagementIdRoute:
+      AuthenticatedListeningListeningReviewsEngagementsEngagementIdRoute,
+  }
+
+const AuthenticatedListeningRouteWithChildren =
+  AuthenticatedListeningRoute._addFileChildren(
+    AuthenticatedListeningRouteChildren,
+  )
+
 interface AuthenticatedManagerRouteChildren {
   AuthenticatedManagerManageIndexRoute: typeof AuthenticatedManagerManageIndexRoute
   AuthenticatedManagerManageEventsNewRoute: typeof AuthenticatedManagerManageEventsNewRoute
@@ -962,14 +1236,17 @@ interface AuthenticatedRouteChildren {
   AuthenticatedConversationsRouteRoute: typeof AuthenticatedConversationsRouteRouteWithChildren
   AuthenticatedExpertRoute: typeof AuthenticatedExpertRouteWithChildren
   AuthenticatedHrRoute: typeof AuthenticatedHrRouteWithChildren
+  AuthenticatedListeningRoute: typeof AuthenticatedListeningRouteWithChildren
   AuthenticatedManagerRoute: typeof AuthenticatedManagerRouteWithChildren
   AuthenticatedRequestsRoute: typeof AuthenticatedRequestsRoute
   AuthenticatedSavedRoute: typeof AuthenticatedSavedRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSurveyRoute: typeof AuthenticatedSurveyRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedAppointmentsAppointmentIdRoute: typeof AuthenticatedAppointmentsAppointmentIdRoute
   AuthenticatedChannelsChannelIdRoute: typeof AuthenticatedChannelsChannelIdRoute
   AuthenticatedContentContentIdRoute: typeof AuthenticatedContentContentIdRoute
+  AuthenticatedFeedbackNewRoute: typeof AuthenticatedFeedbackNewRoute
   AuthenticatedHrAccessRoute: typeof AuthenticatedHrAccessRoute
   AuthenticatedMessagesThreadIdRoute: typeof AuthenticatedMessagesThreadIdRoute
   AuthenticatedSupportAreaRoute: typeof AuthenticatedSupportAreaRoute
@@ -989,15 +1266,18 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedConversationsRouteRouteWithChildren,
   AuthenticatedExpertRoute: AuthenticatedExpertRouteWithChildren,
   AuthenticatedHrRoute: AuthenticatedHrRouteWithChildren,
+  AuthenticatedListeningRoute: AuthenticatedListeningRouteWithChildren,
   AuthenticatedManagerRoute: AuthenticatedManagerRouteWithChildren,
   AuthenticatedRequestsRoute: AuthenticatedRequestsRoute,
   AuthenticatedSavedRoute: AuthenticatedSavedRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSurveyRoute: AuthenticatedSurveyRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedAppointmentsAppointmentIdRoute:
     AuthenticatedAppointmentsAppointmentIdRoute,
   AuthenticatedChannelsChannelIdRoute: AuthenticatedChannelsChannelIdRoute,
   AuthenticatedContentContentIdRoute: AuthenticatedContentContentIdRoute,
+  AuthenticatedFeedbackNewRoute: AuthenticatedFeedbackNewRoute,
   AuthenticatedHrAccessRoute: AuthenticatedHrAccessRoute,
   AuthenticatedMessagesThreadIdRoute: AuthenticatedMessagesThreadIdRoute,
   AuthenticatedSupportAreaRoute: AuthenticatedSupportAreaRoute,

@@ -23,6 +23,8 @@ import {
   SealCheck,
   SlidersHorizontal,
   Presentation,
+  ChartLineUp,
+  ClipboardText,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem, Sheet, SheetTrigger, SheetContent } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -33,6 +35,7 @@ import { ContextPicker } from '../features/context/context-picker';
 import { isSampleDataMode } from '../data-source';
 import { UserRoomListener } from '../calls/user-room-listener';
 import { canAttendWebinars } from '../webinars/route-gate';
+import { canOpenListeningArea } from './_authenticated/_listening';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ context, location }) => {
@@ -57,7 +60,7 @@ interface NavEntry {
 }
 
 function AuthenticatedLayout() {
-  const { t } = useTranslation(['common', 'workspace', 'library', 'calls']);
+  const { t } = useTranslation(['common', 'workspace', 'library', 'calls', 'listening']);
   const { principal, effectiveActions } = useAuth();
   const matches = useMatches();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -169,6 +172,17 @@ function AuthenticatedLayout() {
     ? [{ to: '/webinars', icon: Presentation, label: t('calls:webinar.nav') }]
     : [];
 
+  // Employee listening (ADR 0002): the employer area for any listening or review action,
+  // the survey cycles for the survey administrator.
+  const showListening = canOpenListeningArea(principal, effectiveActions);
+  const listeningNav: NavEntry[] = showListening
+    ? [{ to: '/listening', icon: ChartLineUp, label: t('listening:nav.listening') }]
+    : [];
+  const showCycles = principal ? can(principal, 'listening.cycles.manage', undefined, effectiveActions) : false;
+  const cyclesNav: NavEntry[] = showCycles
+    ? [{ to: '/listening/surveys', icon: ClipboardText, label: t('listening:cycles.title') }]
+    : [];
+
   const allNavItems = [
     ...coreNavItems,
     ...appointmentsNav,
@@ -178,6 +192,8 @@ function AuthenticatedLayout() {
     ...casesNav,
     ...managerNav,
     ...approvalsNav,
+    ...listeningNav,
+    ...cyclesNav,
     ...hrNav,
     ...peopleNav,
     ...orgUnitsNav,
