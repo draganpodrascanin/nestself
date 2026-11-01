@@ -41,8 +41,13 @@ function requireLookup(): ReviewLookup {
   return lookup;
 }
 
+/**
+ * The scope as the spending-ceiling condition sees it. An open quote (no price
+ * yet) exceeds every ceiling: nobody can bind a scope whose amount is not
+ * defined, so the guard refuses before the service does.
+ */
 export function scopeResourceOf(row: Pick<ScopeRow, 'id' | 'orgId' | 'priceMinor' | 'currency'>): Resource {
-  return { type: 'review_scope', id: row.id, orgId: row.orgId, amountMinor: row.priceMinor ?? 0, currency: row.currency, category: 'workplace_review' };
+  return { type: 'review_scope', id: row.id, orgId: row.orgId, amountMinor: row.priceMinor ?? Number.MAX_SAFE_INTEGER, currency: row.currency, category: 'workplace_review' };
 }
 
 export function engagementResourceOf(row: Pick<EngagementRow, 'id' | 'orgId'>): Resource {

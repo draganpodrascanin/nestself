@@ -7,7 +7,7 @@
  * resolvers of the engagement and scope routes.
  */
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, lt, max, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, max, or, sql } from 'drizzle-orm';
 import { ACTIVE_REVIEW_ENGAGEMENT_STATUSES, ACTIVE_REVIEW_REQUEST_STATUSES } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { DbService, type DbExecutor } from '../db/db.service.js';
@@ -106,14 +106,26 @@ export class WorkplaceReviewsRepository implements ActiveReviewLookup {
     return row ?? null;
   }
 
-  /** The coordinator's queue (system context): open requests across organizations, oldest first. */
-  async listQueue(tx?: DbExecutor): Promise<RequestRow[]> {
-    return this.exec(tx)
+  /**
+   * The coordinator's queue (system context): every open request across
+   * organizations, oldest first, then the requests closed (converted, declined
+   * or canceled) in the last `closedDays` days, newest first. History never
+   * pushes an open request out of the list.
+   */
+  async listQueue(now = new Date(), closedDays = 30, tx?: DbExecutor): Promise<RequestRow[]> {
+    const since = new Date(now.getTime() - closedDays * 86_400_000);
+    const open = await this.exec(tx)
       .select()
       .from(reviewRequests)
-      .where(inArray(reviewRequests.status, [...ACTIVE_REVIEW_REQUEST_STATUSES, 'converted']))
-      .orderBy(asc(reviewRequests.createdAt))
+      .where(inArray(reviewRequests.status, [...ACTIVE_REVIEW_REQUEST_STATUSES]))
+      .orderBy(asc(reviewRequests.createdAt));
+    const closed = await this.exec(tx)
+      .select()
+      .from(reviewRequests)
+      .where(and(inArray(reviewRequests.status, ['converted', 'declined', 'canceled']), gte(reviewRequests.createdAt, since)))
+      .orderBy(desc(reviewRequests.createdAt))
       .limit(200);
+    return [...open, ...closed];
   }
 
   // ── Scopes ──────────────────────────────────────────────────────────────

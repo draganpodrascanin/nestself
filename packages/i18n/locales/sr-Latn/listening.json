@@ -271,6 +271,7 @@
     "workplace_reviews_disabled": "Pregledi radnog okruženja nisu uključeni za ovu organizaciju.",
     "active_request_exists": "Zahtev za ovaj obim je već aktivan.",
     "quote_expired": "Ovaj obim više ne važi. Zatražite novi od NestSelf-a.",
+    "scope_unpriced": "Ovaj obim još nema cenu. Zatražite od NestSelf-a verziju sa cenom pre prihvatanja.",
     "scope_not_sent": "Ovaj obim nije otvoren za odluku.",
     "not_scoped": "Obim još nije poslat.",
     "reviewer_not_qualified": "Ova osoba nije kvalifikovan stručnjak za pregled radnog okruženja.",

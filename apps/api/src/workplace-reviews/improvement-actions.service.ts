@@ -71,6 +71,7 @@ export class ImprovementActionsService {
   private async insert(engagement: EngagementRow, body: ImprovementActionCreateRequest, principal: Principal, status: 'proposed' | 'agreed', now: Date): Promise<ActionRow> {
     if (!ACTIVE_REVIEW_ENGAGEMENT_STATUSES.includes(engagement.status)) throw conflict('invalid_state', 'The engagement is closed');
     return this.dbs.withOrgScope(engagement.orgId, async (tx) => {
+      if (body.ownerUserId) await this.engagements.assertMember(body.ownerUserId, engagement.orgId, tx);
       if (body.reportVersionId) {
         const version = await this.repo.findReportVersion(body.reportVersionId, tx);
         if (!version || version.engagementId !== engagement.id) throw notFound();
@@ -116,6 +117,7 @@ export class ImprovementActionsService {
       const locked = await this.repo.lockAction(actionId, tx);
       if (!locked || locked.engagementId !== engagementId) throw notFound();
       const patch: Partial<ActionRow> = {};
+      if (body.ownerUserId) await this.engagements.assertMember(body.ownerUserId, orgId, tx);
       if (body.ownerUserId !== undefined) patch.ownerUserId = body.ownerUserId;
       if (body.dueDate !== undefined) patch.dueDate = body.dueDate ? new Date(body.dueDate) : null;
       if (body.status !== undefined && body.status !== locked.status) {

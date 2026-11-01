@@ -127,7 +127,7 @@ You were named as the designated or the alternative recipient of your organisati
 2. Open a case. The conversation shows what the reporter wrote. You never see who they are, and you must not try to find out from the text.
 3. **Reply** sends a message the reporter reads. **Internal note** (switch it on before sending) is visible only to recipients of this case, never to the reporter.
 4. Change the state as the case moves: **In review**, **Waiting for reporter**, **Action in progress**, **Resolved** (write the explanation the reporter will read), **Closed**.
-5. **Hand over** moves the case to the other recipient of the route when you cannot take it. A case the reporter sent to the alternative recipient is never handed to the designated one.
+5. **Hand over** moves the case to the other recipient of the route when you cannot take it. Hand a case the reporter sent to you as the alternative recipient to the designated one only when you are sure it does not concern them; the automatic escalation never does that.
 6. A case that passes its response target is escalated automatically: from the designated recipient to the alternative, never the other way. You are reminded by email; the email carries no content.
 
 ---

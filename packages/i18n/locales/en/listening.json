@@ -271,6 +271,7 @@
     "workplace_reviews_disabled": "Workplace reviews are not enabled for this organization.",
     "active_request_exists": "A request for this scope is already active.",
     "quote_expired": "This scope is no longer valid. Ask NestSelf for a new one.",
+    "scope_unpriced": "This scope has no price yet. Ask NestSelf for a priced version before accepting.",
     "scope_not_sent": "This scope is not open for a decision.",
     "not_scoped": "No scope has been sent yet.",
     "reviewer_not_qualified": "This person is not a qualified workplace reviewer.",

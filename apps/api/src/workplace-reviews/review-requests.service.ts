@@ -206,7 +206,7 @@ export class ReviewRequestsService {
   // ── Coordinator ─────────────────────────────────────────────────────────
 
   async queue(now = new Date()): Promise<ReviewQueueResponse> {
-    const rows = await this.repo.listQueue();
+    const rows = await this.repo.listQueue(now);
     const [names, orgNames] = await Promise.all([
       this.repo.displayNames(rows.flatMap((r) => [r.requesterUserId, r.coordinatorUserId])),
       this.authzRepo.findOrgNames([...new Set(rows.map((r) => r.orgId))]),

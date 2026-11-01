@@ -20,7 +20,7 @@ import { ReviewNotifier } from './review-notifier.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ReviewRequestsService } from './review-requests.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
-import { WorkplaceReviewsRepository } from './workplace-reviews.repository.js';
+import { WorkplaceReviewsRepository, type EngagementRow } from './workplace-reviews.repository.js';
 
 @Injectable()
 export class ReviewScopesService {
@@ -95,18 +95,17 @@ export class ReviewScopesService {
    * amount; this records the financial decision.
    */
   async accept(orgId: string, scopeId: string, principal: Principal, now = new Date()): Promise<ReviewEngagementResponse> {
-    const engagement = await this.dbs.withOrgScope(orgId, async (tx) => {
+    const outcome = await this.dbs.withOrgScope(orgId, async (tx): Promise<{ engagement: EngagementRow } | { expiredScopeId: string }> => {
       const scope = await this.repo.lockScope(scopeId, tx);
       if (!scope || scope.orgId !== orgId) throw notFound();
       const request = await this.repo.lockRequest(scope.requestId, tx);
       if (!request) throw notFound();
       const existing = await this.repo.findEngagementByRequest(request.id, tx);
-      if (existing && existing.scopeId === scope.id) return existing;
+      if (existing && existing.scopeId === scope.id) return { engagement: existing };
       if (scope.status !== 'sent') throw conflict('scope_not_sent', 'Only a sent scope can be accepted', { status: scope.status });
-      if (scope.validUntil.getTime() <= now.getTime()) {
-        await this.repo.updateScope(scope.id, { status: 'expired' }, tx);
-        throw conflict('quote_expired', 'The scope is no longer valid');
-      }
+      if (scope.validUntil.getTime() <= now.getTime()) return { expiredScopeId: scope.id };
+      // The guard already refused an open quote (it exceeds every ceiling); this keeps the rule when the service is reached another way.
+      if (scope.priceMinor === null) throw conflict('scope_unpriced', 'The scope has no price yet; a priced version must be sent before it can be accepted');
       if (existing) throw conflict('invalid_state', 'The request already has an engagement');
       await this.repo.updateScope(scope.id, { status: 'accepted', acceptedAt: now, acceptedByUserId: principal.userId }, tx);
       const created = await this.repo.insertEngagement(
@@ -140,9 +139,14 @@ export class ReviewScopesService {
         },
         { tx },
       );
-      return created;
+      return { engagement: created };
     });
-    return this.engagements.response(engagement, now);
+    if ('expiredScopeId' in outcome) {
+      // Its own transaction: the refusal below must not roll the expiry back.
+      await this.dbs.withOrgScope(orgId, (tx) => this.repo.updateScope(outcome.expiredScopeId, { status: 'expired' }, tx));
+      throw conflict('quote_expired', 'The scope is no longer valid');
+    }
+    return this.engagements.response(outcome.engagement, now);
   }
 
   async reject(orgId: string, scopeId: string, principal: Principal, now = new Date()): Promise<ReviewRequestOpsResponse | void> {

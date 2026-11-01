@@ -44,9 +44,13 @@ export class FeedbackNotifier {
     return `${surfaceOrigin(this.config, 'workspace')}/feedback/inbox/${caseId}`;
   }
 
-  /** The reporter's own page for the case. */
-  caseUrl(caseId: string): string {
-    return `${surfaceOrigin(this.config, 'workspace')}/feedback/cases/${caseId}`;
+  /**
+   * The reporter's own cases page. The reporter's mail names neither the case
+   * nor its pseudonym: a mailbox the employer hosts must not be able to join an
+   * account to a case (spec PRI-03).
+   */
+  casesUrl(): string {
+    return `${surfaceOrigin(this.config, 'workspace')}/feedback`;
   }
 
   /** `feedback_case_assigned` to the handler who now owns the case, and to no one else. */
@@ -81,13 +85,13 @@ export class FeedbackNotifier {
     if (!reporterUserId) return false;
     const user = await this.identity.findUserById(reporterUserId);
     if (!user) return false;
-    return this.update(user.email, user.locale, row, this.caseUrl(row.id));
+    return this.update(user.email, user.locale, row, this.casesUrl());
   }
 
   private async update(email: string, localeValue: string | null, row: CaseRow, caseUrl: string): Promise<boolean> {
     const locale = toLocale(localeValue);
     try {
-      await this.mailer.send({ to: email, locale, template: 'feedback_case_update', data: { pseudonym: row.pseudonym, caseUrl } });
+      await this.mailer.send({ to: email, locale, template: 'feedback_case_update', data: { caseUrl } });
       return true;
     } catch (error) {
       this.warn('feedback_case_update', locale, email, row.id, error);

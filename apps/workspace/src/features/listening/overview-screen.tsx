@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert, Button, Heading, Skeleton, StatusBlock, Text, buttonClassNames, useToast } from '@nestself/ui';
 import { formatDate } from '@nestself/i18n';
 import type { Locale } from '@nestself/i18n';
-import { can } from '@nestself/contracts';
+import { DEFAULT_LISTENING_POLICY, can } from '@nestself/contracts';
 import type { ListeningOverviewResponse } from '@nestself/contracts';
 import { useAuth } from '../../auth';
 import { useOrgContext } from '../people/use-org-context';
@@ -12,7 +12,7 @@ import type { ListeningApi } from './listening-api';
 import { listeningErrorMessageKey } from './listening-errors';
 import { ReviewOfferCard } from './review-offer-card';
 import { sampleOverview } from './sample-listening';
-import { useDismissOffer, useExportCsv, useOverview } from './use-listening';
+import { useDismissOffer, useExportCsv, useListeningConfiguration, useOverview } from './use-listening';
 
 export interface OverviewScreenProps {
   listeningApi: ListeningApi;
@@ -31,6 +31,10 @@ export function OverviewScreen({ listeningApi, sampleMode }: OverviewScreenProps
   const { principal, effectiveActions } = useAuth();
   const { orgId, needsChoice, apiOrgId, switchError } = useOrgContext(sampleMode);
   const query = useOverview(listeningApi, apiOrgId);
+  // The client's own rules (minimum cohort, freshness window); the platform defaults until they load or in sample mode.
+  const configuration = useListeningConfiguration(listeningApi, apiOrgId);
+  const minimumCohort = configuration.data?.minimumCohort ?? DEFAULT_LISTENING_POLICY.minimumCohort;
+  const freshnessDays = configuration.data?.freshnessDays ?? DEFAULT_LISTENING_POLICY.freshnessDays;
   const dismiss = useDismissOffer(listeningApi, orgId ?? '');
   const exportCsv = useExportCsv(listeningApi, orgId ?? '');
   const { add: addToast } = useToast();
@@ -116,7 +120,7 @@ export function OverviewScreen({ listeningApi, sampleMode }: OverviewScreenProps
               <Text tone="secondary" typeRole="metadata">
                 {current.participation.submittedCount !== null && current.participation.audienceSize !== null
                   ? t('listening:overview.participation', { submitted: current.participation.submittedCount, audience: current.participation.audienceSize })
-                  : t('listening:overview.participationHidden', { minimum: 10 })}
+                  : t('listening:overview.participationHidden', { minimum: minimumCohort })}
               </Text>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -144,7 +148,7 @@ export function OverviewScreen({ listeningApi, sampleMode }: OverviewScreenProps
           </div>
 
           {current.stale ? (
-            <Alert tone="warning" title={t('listening:overview.stale', { days: 45 })}>
+            <Alert tone="warning" title={t('listening:overview.stale', { days: freshnessDays })}>
               {t('listening:overview.staleBody')}
             </Alert>
           ) : null}

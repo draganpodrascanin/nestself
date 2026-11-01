@@ -153,15 +153,23 @@ export class ListeningJobsService {
       }
       const limit = policy?.reminderLimit ?? 2;
       const today = localDateKey(now, timeZone);
-      let sent = 0;
-      await this.dbs.withOrgScope(cycle.orgId, async (tx) => {
+      // The rows are marked inside the transaction and the mails go out once it
+      // committed (email after commit): a rolled-back run sends nothing, a retried
+      // run finds the rows marked, and a crash between commit and send loses one
+      // reminder, never doubles it.
+      const due = await this.dbs.withOrgScope(cycle.orgId, async (tx) => {
+        const marked: Awaited<ReturnType<ListeningRepository['findReminderCandidates']>> = [];
         for (const candidate of await this.repo.findReminderCandidates(cycle.id, limit, tx)) {
           if (candidate.lastReminderAt && localDateKey(candidate.lastReminderAt, timeZone) === today) continue;
-          // The row is marked before the send: a crash between the two loses one reminder, never doubles it.
           await this.repo.updateParticipation(candidate.id, { remindersSent: candidate.remindersSent + 1, lastReminderAt: now }, tx);
-          if (await this.notifier.reminder(cycle, candidate, org?.name ?? 'your organization', timeZone)) sent += 1;
+          marked.push(candidate);
         }
+        return marked;
       });
+      let sent = 0;
+      for (const candidate of due) {
+        if (await this.notifier.reminder(cycle, candidate, org?.name ?? 'your organization', timeZone)) sent += 1;
+      }
       if (sent > 0) {
         await this.audit.record({
           action: 'listening.reminders.sent',

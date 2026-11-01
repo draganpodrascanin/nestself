@@ -271,6 +271,7 @@
     "workplace_reviews_disabled": "A munkahelyi átvilágítás nincs bekapcsolva ennél a szervezetnél.",
     "active_request_exists": "Erre a terjedelemre már van aktív kérés.",
     "quote_expired": "Ez az ajánlat már nem érvényes. Kérjen újat a NestSelftől.",
+    "scope_unpriced": "Ennek az ajánlatnak még nincs ára. Kérjen árazott változatot a NestSelftől az elfogadás előtt.",
     "scope_not_sent": "Ez az ajánlat nem áll döntésre nyitva.",
     "not_scoped": "Még nem küldtek ajánlatot.",
     "reviewer_not_qualified": "Ez a személy nem képzett munkahelyi átvilágító.",

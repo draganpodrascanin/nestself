@@ -204,6 +204,7 @@ describe('ReviewEngagementsService', () => {
       organizations as never,
       audit() as never,
       n as never,
+      { findActiveByUserAndOrg: vi.fn().mockResolvedValue({ id: 'membership_1' }) } as never
     );
     return { service, repo, appointments, callsJobs, notifier: n };
   }

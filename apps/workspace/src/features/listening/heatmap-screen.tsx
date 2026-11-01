@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Alert, Badge, Heading, Skeleton, StatusBlock, Text, buttonClassNames } from '@nestself/ui';
-import { LISTENING_DIMENSION_KEYS } from '@nestself/contracts';
+import { DEFAULT_LISTENING_POLICY, LISTENING_DIMENSION_KEYS } from '@nestself/contracts';
 import type { DimensionCell, ListeningHeatmapResponse } from '@nestself/contracts';
 import { useAuth } from '../../auth';
 import { useOrgContext } from '../people/use-org-context';
@@ -9,7 +9,7 @@ import type { ListeningApi } from './listening-api';
 import { listeningErrorMessageKey } from './listening-errors';
 import { sampleHeatmap } from './sample-listening';
 import { scoreTone, statusKey } from './score-tone';
-import { useHeatmap } from './use-listening';
+import { useHeatmap, useListeningConfiguration } from './use-listening';
 
 export interface HeatmapScreenProps {
   listeningApi: ListeningApi;
@@ -29,11 +29,14 @@ export function HeatmapScreen({ listeningApi, sampleMode, snapshotId }: HeatmapS
   const { principal } = useAuth();
   const { orgId, needsChoice, apiOrgId, switchError } = useOrgContext(sampleMode);
   const query = useHeatmap(listeningApi, apiOrgId, snapshotId ?? null);
+  const configuration = useListeningConfiguration(listeningApi, apiOrgId);
+  const minimumCohort = configuration.data?.minimumCohort ?? DEFAULT_LISTENING_POLICY.minimumCohort;
+  const freshnessDays = configuration.data?.freshnessDays ?? DEFAULT_LISTENING_POLICY.freshnessDays;
 
   const header = (
     <div className="space-y-2">
       <Heading level={1}>{t('listening:heatmap.title')}</Heading>
-      <Text tone="secondary">{t('listening:heatmap.lead', { minimum: 10 })}</Text>
+      <Text tone="secondary">{t('listening:heatmap.lead', { minimum: minimumCohort })}</Text>
       <Link to="/listening" className="type-label text-primary underline">
         {t('listening:heatmap.back')}
       </Link>
@@ -90,7 +93,7 @@ export function HeatmapScreen({ listeningApi, sampleMode, snapshotId }: HeatmapS
   return (
     <div className="space-y-6">
       {header}
-      {heatmap.stale ? <Alert tone="warning">{t('listening:overview.stale', { days: 45 })}</Alert> : null}
+      {heatmap.stale ? <Alert tone="warning">{t('listening:overview.stale', { days: freshnessDays })}</Alert> : null}
       <div className="overflow-x-auto rounded-card border border-border-subtle">
         <table className="w-full min-w-[40rem] border-collapse type-table">
           <caption className="sr-only">{t('listening:heatmap.title')}</caption>

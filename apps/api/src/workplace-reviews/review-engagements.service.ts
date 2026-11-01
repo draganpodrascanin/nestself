@@ -48,13 +48,15 @@ import { DbService, type DbExecutor } from '../db/db.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuthorizationRepository } from '../db/repositories/authorization.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { MembershipsRepository } from '../db/repositories/memberships.repository.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { OrganizationsRepository } from '../db/repositories/organizations.repository.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CallsJobSchedulerService } from '../jobs/calls-job-scheduler.service.js';
 import { assemblePrincipal } from '../principal/assemble-principal.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { PrincipalLoader } from '../principal/principal-loader.js';
-import { DENY_AS_NOT_FOUND, conflict, notFound } from './review-errors.js';
+import { DENY_AS_NOT_FOUND, conflict, notFound, validationError } from './review-errors.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ReviewNotifier } from './review-notifier.js';
 import { engagementResourceOf } from './review-resolvers.js';
@@ -82,7 +84,15 @@ export class ReviewEngagementsService {
     private readonly organizations: OrganizationsRepository,
     private readonly audit: AuditWriter,
     private readonly notifier: ReviewNotifier,
+    private readonly memberships: MembershipsRepository,
   ) {}
+
+  /** A follow-up owner is an active member of the engagement's organization, never an account from elsewhere. */
+  async assertMember(userId: string, orgId: string, tx: DbExecutor): Promise<void> {
+    if (!(await this.memberships.findActiveByUserAndOrg(userId, orgId, tx))) {
+      throw validationError('The owner must be an active member of the organization', 'ownerUserId');
+    }
+  }
 
   // ── Views ───────────────────────────────────────────────────────────────
 
@@ -371,6 +381,7 @@ export class ReviewEngagementsService {
     const engagement = await this.forReviewer(principal, id, ACTIONS['workplace_reviews.report.write']);
     if (!ACTIVE_REVIEW_ENGAGEMENT_STATUSES.includes(engagement.status)) throw conflict('invalid_state', 'The engagement is closed');
     const next = await this.dbs.withOrgScope(engagement.orgId, async (tx) => {
+      if (body.ownerUserId) await this.assertMember(body.ownerUserId, engagement.orgId, tx);
       const updated = await this.repo.updateEngagement(
         id,
         { followUpTargetDate: new Date(body.targetDate), followUpOwnerUserId: body.ownerUserId ?? null, status: engagement.status === 'report_shared' ? 'follow_up' : engagement.status },

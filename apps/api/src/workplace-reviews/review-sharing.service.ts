@@ -7,7 +7,7 @@
  * access and claims nothing about copies already made.
  */
 import { Injectable } from '@nestjs/common';
-import type { Principal, ReviewEngagementResponse, ReviewPackResponse, ReviewSharingGrantRequest } from '@nestself/contracts';
+import { ACTIVE_REVIEW_ENGAGEMENT_STATUSES, type Principal, type ReviewEngagementResponse, type ReviewPackResponse, type ReviewSharingGrantRequest } from '@nestself/contracts';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { AuditWriter } from '../audit/audit-writer.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -97,14 +97,23 @@ export class ReviewSharingService {
   /** The reviewer's pack: the granted snapshots as the employer's heatmap shows them, suppression included. */
   async pack(principal: Principal, engagementId: string, now = new Date()): Promise<ReviewPackResponse> {
     const engagement = await this.engagements.forReviewer(principal, engagementId);
+    // A completed or canceled engagement ends the sharing with it (spec REV-10).
+    if (!ACTIVE_REVIEW_ENGAGEMENT_STATUSES.includes(engagement.status)) throw conflict('sharing_revoked', 'The engagement is closed; its sharing ended with it');
     const pack = await this.dbs.withOrgScope(engagement.orgId, async (tx) => {
       const grants = (await this.repo.listSharingGrants(engagementId, tx)).filter((g) => grantActive(g, now));
       if (grants.length === 0) throw conflict('sharing_revoked', 'The organization has not shared results with this engagement, or withdrew the sharing');
-      const snapshotIds = [...new Set(grants.flatMap((g) => g.snapshotIds))];
-      const cohortKeys = new Set(grants.flatMap((g) => g.cohortKeys));
+      // Each grant names its own snapshots and cohorts: a cohort granted on one result is not shared on another.
+      const cohortsBySnapshot = new Map<string, Set<string>>();
+      for (const grant of grants) {
+        for (const snapshotId of grant.snapshotIds) {
+          const set = cohortsBySnapshot.get(snapshotId) ?? new Set<string>();
+          for (const key of grant.cohortKeys) set.add(key);
+          cohortsBySnapshot.set(snapshotId, set);
+        }
+      }
       const units = await this.listening.findUnits(engagement.orgId, tx);
       const snapshots: ReviewPackResponse['snapshots'] = [];
-      for (const snapshotId of snapshotIds) {
+      for (const [snapshotId, cohortKeys] of cohortsBySnapshot) {
         const snapshot = await this.listening.findSnapshot(snapshotId, tx);
         if (!snapshot || snapshot.orgId !== engagement.orgId) continue;
         const [cells, cycle] = await Promise.all([this.listening.findCells(snapshotId, tx), this.listening.findCycle(snapshot.cycleId, tx)]);

@@ -273,6 +273,30 @@ describe.skipIf(!shouldRun)('Workplace reviews (e2e)', () => {
     expect(refused.status).toBe(403);
     await testDb.db.delete(reviewScopes).where(eq(reviewScopes.id, tooExpensive!.id));
 
+    // An open quote (no price yet) binds nothing: it exceeds every ceiling.
+    const [openQuote] = await testDb.db
+      .insert(reviewScopes)
+      .values({
+        orgId: ORG,
+        requestId,
+        version: 98,
+        serviceId: 'review_service_workplace_review',
+        title: 'Open quote',
+        deliverables: 'x',
+        participants: 'x',
+        priceMinor: null,
+        currency: 'EUR',
+        termsVersion: '2026-11',
+        validUntil: new Date(Date.now() + 86_400_000),
+        cancellationPolicy: 'x',
+        status: 'sent',
+        sentAt: new Date(),
+        createdByUserId: 'user_nikola',
+      })
+      .returning();
+    expect((await post(ivana, `/orgs/${ORG}/workplace-reviews/scopes/${openQuote!.id}/accept`)).status).toBe(403);
+    await testDb.db.delete(reviewScopes).where(eq(reviewScopes.id, openQuote!.id));
+
     const accepted = await post(ivana, `/orgs/${ORG}/workplace-reviews/scopes/${scopeId}/accept`);
     expect(accepted.status, JSON.stringify(accepted.body)).toBe(200);
     engagementId = accepted.body.id;

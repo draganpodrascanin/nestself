@@ -36,6 +36,7 @@ import type { Locale } from '@nestself/i18n';
 import { useAuth } from '../../auth';
 import type { ListeningApi } from '../listening/listening-api';
 import { listeningErrorMessageKey } from '../listening/listening-errors';
+import { useHeatmap } from '../listening/use-listening';
 import { useOrgContext } from '../people/use-org-context';
 import { ReportView } from './report-view';
 import { ACTION_TONE, ENGAGEMENT_TONE, actionStatusKey, engagementStatusKey, priceLabel, scopeLabel } from './review-labels';
@@ -74,6 +75,8 @@ export function EngagementScreen({ listeningApi, sampleMode, engagementId }: Eng
   const query = useEngagement(listeningApi, apiOrgId, engagementId);
   const data: ReviewEngagementResponse | undefined = sampleMode ? sampleEngagement(engagementId) : query.data;
   const requestQuery = useReviewRequest(listeningApi, sampleMode ? null : apiOrgId, data?.requestId ?? '');
+  // The departments that can be shared are the heatmap's rows for the shared result, not whatever earlier grants named.
+  const heatmapQuery = useHeatmap(listeningApi, sampleMode ? null : apiOrgId, requestQuery.data?.snapshotIds[0] ?? null);
   const book = useBookEngagement(listeningApi, orgId ?? '', engagementId);
   const cancel = useCancelEngagement(listeningApi, orgId ?? '', engagementId);
   const share = useShareWithReviewer(listeningApi, orgId ?? '', engagementId);
@@ -124,6 +127,8 @@ export function EngagementScreen({ listeningApi, sampleMode, engagementId }: Eng
   const demo = () => addToast({ title: t('common:sample.demoNoop'), tone: 'info' });
   const active = ACTIVE_REVIEW_ENGAGEMENT_STATUSES.includes(data.status);
   const snapshotIds = sampleMode ? [] : (requestQuery.data?.snapshotIds ?? []);
+  const heatmapDepartments = heatmapQuery.data?.rows.filter((r) => r.kind === 'department').map((r) => r.cohortKey) ?? [];
+  const departmentCohorts = heatmapDepartments.length > 0 ? heatmapDepartments : departmentKeys(data);
 
   const onBook = async () => {
     if (windowIndex === '') return;
@@ -142,7 +147,7 @@ export function EngagementScreen({ listeningApi, sampleMode, engagementId }: Eng
     if (sampleMode) return demo();
     if (snapshotIds.length === 0) return;
     try {
-      await share.mutateAsync({ snapshotIds, cohortKeys: shareScope === 'all' ? ['company', ...departmentKeys(data)] : ['company'] });
+      await share.mutateAsync({ snapshotIds, cohortKeys: shareScope === 'all' ? ['company', ...departmentCohorts] : ['company'] });
     } catch (err) {
       fail(err);
     }

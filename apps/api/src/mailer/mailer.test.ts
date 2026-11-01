@@ -121,8 +121,7 @@ const samples: { [T in MailTemplateName]: MailTemplateData<T> } = {
     caseUrl: 'https://app.nestself.rs/feedback/inbox/case_1',
   },
   feedback_case_update: {
-    pseudonym: 'Reporter-AB2C',
-    caseUrl: 'https://app.nestself.rs/feedback/cases/case_1',
+    caseUrl: 'https://app.nestself.rs/feedback',
   },
   review_request_update: { organizationName: 'Example d.o.o.', status: 'in_review', requestUrl: 'https://app.nestself.rs/listening/reviews/req_1' },
   review_scope_sent: { organizationName: 'Example d.o.o.', validUntil: '2026-11-20T09:00:00.000Z', timeZone: 'Europe/Belgrade', requestUrl: 'https://app.nestself.rs/listening/reviews/req_1' },

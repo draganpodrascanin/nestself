@@ -219,10 +219,16 @@ export function RequestScreen({ listeningApi, sampleMode, requestId }: RequestSc
             ) : null}
             {scope.status === 'sent' ? (
               canAccept ? (
-                <div className="flex flex-wrap gap-3">
-                  <Button variant="primary" onClick={() => setAcceptTarget(scope)} disabled={accept.isPending}>
-                    {t('listening:reviews.detail.scope.accept')}
-                  </Button>
+                <div className="flex flex-wrap items-center gap-3">
+                  {scope.priceMinor === null ? (
+                    <Text tone="secondary" typeRole="metadata">
+                      {t('listening:errors.scope_unpriced')}
+                    </Text>
+                  ) : (
+                    <Button variant="primary" onClick={() => setAcceptTarget(scope)} disabled={accept.isPending}>
+                      {t('listening:reviews.detail.scope.accept')}
+                    </Button>
+                  )}
                   <Button variant="ghost" onClick={() => void onReject(scope)} disabled={reject.isPending}>
                     {t('listening:reviews.detail.scope.reject')}
                   </Button>

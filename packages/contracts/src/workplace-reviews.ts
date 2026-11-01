@@ -70,6 +70,7 @@ export const REVIEW_ERROR_CODES = [
   'workplace_reviews_disabled',
   'active_request_exists',
   'quote_expired',
+  'scope_unpriced',
   'scope_not_sent',
   'not_scoped',
   'reviewer_not_qualified',
