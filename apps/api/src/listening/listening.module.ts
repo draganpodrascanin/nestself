@@ -8,6 +8,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
 import { MailerModule } from '../mailer/mailer.module.js';
 import { CyclesService } from './cycles.service.js';
+import { ExportService } from './export.service.js';
 import { FinalizationService } from './finalization.service.js';
 import { ListeningConfigurationService } from './listening-configuration.service.js';
 import { ListeningJobSchedulerService } from './listening-job-scheduler.service.js';
@@ -35,6 +36,7 @@ import { ReviewOfferService } from './review-offer.service.js';
     { provide: CYCLE_FINALIZER, useExisting: FinalizationService },
     ReviewOfferService,
     ReportsService,
+    ExportService,
     ListeningJobsService,
     ListeningJobSchedulerService,
   ],

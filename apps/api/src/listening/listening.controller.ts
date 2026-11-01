@@ -14,11 +14,12 @@
  * GET  /orgs/:orgId/listening/heatmap            listening.reports.read   orgResourceFromContext('listening_report')  ?snapshotId=
  * GET  /orgs/:orgId/listening/dimensions/:key    listening.reports.read   orgResourceFromContext('listening_report')  ?snapshotId=
  * POST /orgs/:orgId/listening/offer/dismiss      workplace_reviews.request orgResourceFromContext('workplace_review')
+ * GET  /orgs/:orgId/listening/snapshots/:snapshotId/export.csv  listening.reports.export (step-up export)  text/csv
  *
  * The employee routes resolve the organization from the personal context and
  * the caller's own participation row; nothing lists other participants.
  */
-import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Query, Res } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   ACTIONS,
@@ -55,6 +56,8 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { CyclesService } from './cycles.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
+import { ExportService } from './export.service.js';
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ListeningConfigurationService } from './listening-configuration.service.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ParticipationService } from './participation.service.js';
@@ -66,6 +69,11 @@ const cycleResource = orgResourceFromContext('survey_cycle');
 const reportResource = orgResourceFromContext('listening_report');
 const reviewResource = orgResourceFromContext('workplace_review');
 
+/** Minimal Express response shape for the CSV download (avoids depending on @types/express). */
+interface CsvResponse {
+  setHeader(name: string, value: string): void;
+}
+
 @Controller()
 export class ListeningController {
   constructor(
@@ -73,6 +81,7 @@ export class ListeningController {
     private readonly cycles: CyclesService,
     private readonly configuration: ListeningConfigurationService,
     private readonly reports: ReportsService,
+    private readonly exports: ExportService,
   ) {}
 
   // ── Employee ─────────────────────────────────────────────────────────────
@@ -178,6 +187,22 @@ export class ListeningController {
   ): Promise<OfferDismissResponse> {
     await this.reports.dismissOffer(orgId, principal, body.snapshotId);
     return { dismissed: true };
+  }
+
+  /** The aggregate CSV of one snapshot: the same cells as the dashboard (spec REP-04). */
+  @Get('orgs/:orgId/listening/snapshots/:snapshotId/export.csv')
+  @Authorize(ACTIONS['listening.reports.export'], reportResource)
+  async exportCsv(
+    @Param('orgId') orgId: string,
+    @Param('snapshotId') snapshotId: string,
+    @CurrentPrincipal() principal: Principal,
+    @Res({ passthrough: true }) res: CsvResponse,
+  ): Promise<string> {
+    const file = await this.exports.csv(orgId, principal, snapshotId);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return file.content;
   }
 
   /** The client's rules as the organization may read them; changes come from NestSelf operations. */

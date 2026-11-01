@@ -106,6 +106,17 @@ describe('ListeningJobsService.remind', () => {
   });
 });
 
+describe('ListeningJobsService.purge', () => {
+  it('deletes stale drafts and participation links older than a year after publication', async () => {
+    const { service, repo } = setup([]);
+    (repo as unknown as { deleteStaleDrafts: unknown }).deleteStaleDrafts = vi.fn().mockResolvedValue(4);
+    (repo as unknown as { deleteExpiredParticipations: unknown }).deleteExpiredParticipations = vi.fn().mockResolvedValue(30);
+    const report = await service.run('listening.purge', new Date('2026-11-05T03:20:00.000Z'));
+    expect(report).toEqual({ job: 'listening.purge', draftsDeleted: 4, participationsDeleted: 30 });
+    expect((repo as unknown as { deleteExpiredParticipations: ReturnType<typeof vi.fn> }).deleteExpiredParticipations).toHaveBeenCalledWith(new Date('2025-11-05T03:20:00.000Z'));
+  });
+});
+
 describe('ListeningJobsService.tick', () => {
   it('schedules, launches and finalizes through the finalizer when one is bound', async () => {
     const finalizer = { finalize: vi.fn().mockResolvedValue('published') };

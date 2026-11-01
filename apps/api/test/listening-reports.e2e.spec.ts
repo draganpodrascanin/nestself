@@ -19,8 +19,9 @@ import { SAMPLE_EXTERNAL_IDENTITIES } from '@nestself/sample-data';
 import { IdentityProviderService } from '../src/identity/identity-provider.service.js';
 import type { FakeIdentityProvider } from '../src/identity/fake-identity-provider.js';
 import { seed } from '../src/db/seed/seed-lib.js';
-import { surveyAggregateCells, surveyCycles, surveyResponses, surveySnapshots } from '../src/db/schema/index.js';
+import { auditEvents, grants, surveyAggregateCells, surveyCycles, surveyDrafts, surveyParticipations, surveyResponses, surveySnapshots } from '../src/db/schema/index.js';
 import { ListeningJobsService } from '../src/listening/listening-jobs.service.js';
+import { PrincipalLoader } from '../src/principal/principal-loader.js';
 import { SAMPLE_QUESTIONNAIRE_V1_ID } from '../src/listening/listening-defaults.js';
 import { resetTestDatabase, type TestDatabase } from './db/test-database.js';
 
@@ -247,6 +248,63 @@ describe.skipIf(!shouldRun)('Employee listening: finalization and reports (e2e)'
     const res = await get(ivana, `/orgs/${ORG}/listening/overview`);
     expect(res.body.reviewOffer).toMatchObject({ eligible: false, dismissed: true, dimensionKeys: ['sustainable_workload'] });
     expect((res.body.current.dimensions as Array<{ key: string; status: string }>).find((d) => d.key === 'sustainable_workload')!.status).toBe('danger');
+  });
+
+  it('the CSV export needs its own grant, then agrees with the dashboard cell for cell and is audited (REP-04)', async () => {
+    const denied = await get(ivana, `/orgs/${ORG}/listening/snapshots/${snapshotId}/export.csv`);
+    expect(denied.status).toBe(403);
+
+    await testDb.db.insert(grants).values({
+      id: 'grant_test_ivana_reporting_user',
+      subjectUserId: 'user_ivana',
+      templateKey: 'reporting_user',
+      actions: ['reports.aggregate.read', 'report.export', 'listening.reports.read', 'listening.reports.export'],
+      scopeType: 'organization',
+      scopeOrgId: ORG,
+      grantedByUserId: 'user_ivana',
+      validFrom: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    // The grant cache is per user and organization; a direct insert must invalidate it as the grant routes do.
+    await app.get(PrincipalLoader, { strict: false }).invalidateUser('user_ivana', [ORG]);
+    const exporter = await signInMember('user_ivana', { kind: 'organization', orgId: ORG });
+    const res = await get(exporter, `/orgs/${ORG}/listening/snapshots/${snapshotId}/export.csv`);
+    expect(res.status, res.text).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/csv/);
+    expect(res.headers['content-disposition']).toBe(`attachment; filename="listening-${snapshotId}.csv"`);
+    const lines = res.text.trimEnd().split('\r\n');
+    expect(lines[0]).toMatch(/^snapshot_id,cycle_opens_at/);
+    expect(lines).toHaveLength(1 + 3 * 5);
+    const workload = lines.find((l) => l.includes(',company,company,sustainable_workload,'))!;
+    expect(workload).toContain(',48.0,danger,25,48,0,52,');
+    const speakingUp = lines.find((l) => l.includes(',company,company,speaking_up,'))!;
+    expect(speakingUp.endsWith(',speaking_up,,,,,,,insufficient_responses')).toBe(true);
+    const engineering = lines.find((l) => l.includes(`,${ENGINEERING},Engineering,job_satisfaction,`))!;
+    expect(engineering.endsWith(',job_satisfaction,,,,,,,privacy_suppressed')).toBe(true);
+    expect(res.text).not.toMatch(/user_|@example/);
+
+    const [audit] = await testDb.db.select().from(auditEvents).where(eq(auditEvents.action, 'listening.export.generated'));
+    expect(audit).toMatchObject({ actorUserId: 'user_ivana', recordId: snapshotId, orgId: ORG });
+
+    const unknown = await get(exporter, `/orgs/${ORG}/listening/snapshots/not-a-snapshot/export.csv`);
+    expect(unknown.status).toBe(404);
+    const employee = await get(jovan, `/orgs/${ORG}/listening/snapshots/${snapshotId}/export.csv`);
+    expect(employee.status).toBe(403);
+  });
+
+  it('the nightly purge removes drafts of closed cycles and old participation links, never answers or snapshots', async () => {
+    const [participation] = await testDb.db.select().from(surveyParticipations).where(eq(surveyParticipations.cycleId, cycleId));
+    await testDb.db.insert(surveyDrafts).values({ participationId: participation!.id, orgId: ORG, answers: { speaking_up: 2 } }).onConflictDoNothing();
+    const jobs = app.get(ListeningJobsService, { strict: false });
+    const first = await jobs.purge();
+    expect(first.draftsDeleted).toBeGreaterThanOrEqual(1);
+    expect(first.participationsDeleted).toBe(0);
+    await testDb.db.update(surveyCycles).set({ finalizedAt: new Date(Date.now() - 400 * 86_400_000) }).where(eq(surveyCycles.id, cycleId));
+    const second = await jobs.purge();
+    expect(second.participationsDeleted).toBeGreaterThanOrEqual(1);
+    expect(await testDb.db.select().from(surveyResponses).where(eq(surveyResponses.cycleId, cycleId))).toHaveLength(25);
+    expect(await testDb.db.select().from(surveySnapshots).where(eq(surveySnapshots.cycleId, cycleId))).toHaveLength(1);
+    const third = await jobs.purge();
+    expect(third).toEqual({ job: 'listening.purge', draftsDeleted: 0, participationsDeleted: 0 });
   });
 
   it('an employee cannot read the employer reports and a guessed snapshot id answers 404', async () => {

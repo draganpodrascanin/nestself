@@ -18,6 +18,7 @@ export const LISTENING_QUEUE = 'nestself-listening';
 export const LISTENING_SCHEDULES: Record<ListeningJobName, string> = {
   'listening.tick': '*/5 * * * *',
   'listening.remind': '0 * * * *',
+  'listening.purge': '20 3 * * *',
 };
 
 export interface ListeningJobHandler {

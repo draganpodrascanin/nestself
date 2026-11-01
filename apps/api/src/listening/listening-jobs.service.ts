@@ -13,6 +13,10 @@
  *   participant per cycle, only to still-eligible non-submitters, only
  *   between 09:00 and 18:00 in the organization's time zone, and at most one
  *   per local day, so a retry within the hour sends nothing twice.
+ * - `listening.purge` (nightly): deletes the private drafts of cycles that are
+ *   no longer open and the participation links of cycles published longer
+ *   ago than the `survey_participation_links` retention (one year); both are
+ *   idempotent and touch no answer or snapshot (spec PRI-05).
  */
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
@@ -28,7 +32,7 @@ import { ListeningNotifier } from './listening-notifier.js';
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- NestJS DI needs runtime reference
 import { ListeningRepository } from './listening.repository.js';
 
-export const LISTENING_JOB_NAMES = ['listening.tick', 'listening.remind'] as const;
+export const LISTENING_JOB_NAMES = ['listening.tick', 'listening.remind', 'listening.purge'] as const;
 export type ListeningJobName = (typeof LISTENING_JOB_NAMES)[number];
 
 export function isListeningJobName(value: string): value is ListeningJobName {
@@ -53,7 +57,16 @@ export interface RemindReport {
   skippedOutsideWindow: number;
 }
 
-export type ListeningJobReport = TickReport | RemindReport;
+export interface PurgeReport {
+  job: 'listening.purge';
+  draftsDeleted: number;
+  participationsDeleted: number;
+}
+
+export type ListeningJobReport = TickReport | RemindReport | PurgeReport;
+
+/** Participation links are kept one year after publication (`survey_participation_links`). */
+export const PARTICIPATION_RETENTION_DAYS = 365;
 
 /** Finalizes one cycle; provided by the reporting task's `FinalizationService`. */
 export interface CycleFinalizer {
@@ -93,7 +106,22 @@ export class ListeningJobsService {
   ) {}
 
   async run(name: ListeningJobName, now = new Date()): Promise<ListeningJobReport> {
-    return name === 'listening.tick' ? this.tick(now) : this.remind(now);
+    switch (name) {
+      case 'listening.tick':
+        return this.tick(now);
+      case 'listening.remind':
+        return this.remind(now);
+      case 'listening.purge':
+        return this.purge(now);
+    }
+  }
+
+  async purge(now = new Date()): Promise<PurgeReport> {
+    const draftsDeleted = await this.repo.deleteStaleDrafts();
+    const before = new Date(now.getTime() - PARTICIPATION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const participationsDeleted = await this.repo.deleteExpiredParticipations(before);
+    this.logger.log(`listening purge: ${draftsDeleted} drafts, ${participationsDeleted} participation links`);
+    return { job: 'listening.purge', draftsDeleted, participationsDeleted };
   }
 
   async tick(now = new Date()): Promise<TickReport> {
