@@ -102,4 +102,11 @@ export const listeningKeys = {
   configuration: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', orgId, 'configuration'] as const,
   opsConfiguration: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', 'ops', orgId, 'configuration'] as const,
   questionnaires: (ctx: ActiveContext) => [...contextKey(ctx), 'listening', 'ops', 'questionnaires'] as const,
+  // Feedback cases (spec Epic F)
+  feedbackRoutes: (ctx: ActiveContext) => [...contextKey(ctx), 'feedback', 'routes'] as const,
+  myFeedbackCases: (ctx: ActiveContext) => [...contextKey(ctx), 'feedback', 'mine'] as const,
+  myFeedbackCase: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'feedback', 'mine', id] as const,
+  feedbackInbox: (ctx: ActiveContext) => [...contextKey(ctx), 'feedback', 'inbox'] as const,
+  handlerCase: (ctx: ActiveContext, id: string) => [...contextKey(ctx), 'feedback', 'inbox', id] as const,
+  orgFeedbackRoutes: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'feedback', orgId, 'routes'] as const,
 };

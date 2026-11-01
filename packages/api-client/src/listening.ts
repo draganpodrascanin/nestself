@@ -6,6 +6,13 @@
  * contracts schema; the CSV export is fetched as text through `exportCsv`.
  */
 import {
+  FeedbackCaseCreateResponseSchema,
+  FeedbackRoutesAdminResponseSchema,
+  FeedbackRoutesResponseSchema,
+  HandlerFeedbackCaseResponseSchema,
+  HandlerFeedbackInboxResponseSchema,
+  MyFeedbackCaseResponseSchema,
+  MyFeedbackCasesResponseSchema,
   ListeningConfigurationResponseSchema,
   ListeningDimensionDetailResponseSchema,
   ListeningHeatmapResponseSchema,
@@ -20,6 +27,12 @@ import {
   SurveyReceiptResponseSchema,
 } from '@nestself/contracts';
 import type {
+  FeedbackCaseCreateRequest,
+  FeedbackMessageRequest,
+  FeedbackReassignRequest,
+  FeedbackReporterMessageRequest,
+  FeedbackRoutesUpdateRequest,
+  FeedbackStateRequest,
   ListeningConfigurationUpdateRequest,
   ListeningDimensionKey,
   OfferDismissRequest,
@@ -119,6 +132,30 @@ export function createListeningApi(client: ApiClient) {
       client.request(`/api/ops/listening/questionnaires/${seg(id)}/publish`, { ...send('POST', {}), schema: QuestionnaireVersionResponseSchema }),
     archiveQuestionnaire: (id: string) =>
       client.request(`/api/ops/listening/questionnaires/${seg(id)}/archive`, { ...send('POST', {}), schema: QuestionnaireVersionResponseSchema }),
+
+    // ── Feedback cases (spec Epic F) ─────────────────────────────────────
+    /** GET /me/feedback/routes: the enabled routes with their recipients named by function. */
+    feedbackRoutes: () => client.request('/api/me/feedback/routes', { method: 'GET', schema: FeedbackRoutesResponseSchema }),
+    /** POST /me/feedback/cases with an `Idempotency-Key`, so a retry replays the receipt instead of raising twice. */
+    createFeedbackCase: (body: FeedbackCaseCreateRequest, idempotencyKey: string) =>
+      client.request('/api/me/feedback/cases', { ...send('POST', body, { 'Idempotency-Key': idempotencyKey }), schema: FeedbackCaseCreateResponseSchema }),
+    myFeedbackCases: () => client.request('/api/me/feedback/cases', { method: 'GET', schema: MyFeedbackCasesResponseSchema }),
+    myFeedbackCase: (id: string) => client.request(`/api/me/feedback/cases/${seg(id)}`, { method: 'GET', schema: MyFeedbackCaseResponseSchema }),
+    replyToMyCase: (id: string, body: FeedbackReporterMessageRequest, idempotencyKey: string) =>
+      client.request(`/api/me/feedback/cases/${seg(id)}/messages`, { ...send('POST', body, { 'Idempotency-Key': idempotencyKey }), schema: MyFeedbackCaseResponseSchema }),
+    /** GET /feedback/inbox: the handler's assigned cases (organization context). */
+    feedbackInbox: () => client.request('/api/feedback/inbox', { method: 'GET', schema: HandlerFeedbackInboxResponseSchema }),
+    handlerCase: (id: string) => client.request(`/api/feedback/cases/${seg(id)}`, { method: 'GET', schema: HandlerFeedbackCaseResponseSchema }),
+    handlerMessage: (id: string, body: FeedbackMessageRequest, idempotencyKey: string) =>
+      client.request(`/api/feedback/cases/${seg(id)}/messages`, { ...send('POST', body, { 'Idempotency-Key': idempotencyKey }), schema: HandlerFeedbackCaseResponseSchema }),
+    setCaseState: (id: string, body: FeedbackStateRequest) =>
+      client.request(`/api/feedback/cases/${seg(id)}/state`, { ...send('POST', body), schema: HandlerFeedbackCaseResponseSchema }),
+    reassignCase: (id: string, body: FeedbackReassignRequest) =>
+      client.request(`/api/feedback/cases/${seg(id)}/reassign`, { ...send('POST', body), schema: HandlerFeedbackCaseResponseSchema }),
+    orgFeedbackRoutes: (orgId: string) =>
+      client.request(`/api/orgs/${seg(orgId)}/feedback/routes`, { method: 'GET', schema: FeedbackRoutesAdminResponseSchema }),
+    updateOrgFeedbackRoutes: (orgId: string, body: FeedbackRoutesUpdateRequest) =>
+      client.request(`/api/orgs/${seg(orgId)}/feedback/routes`, { ...send('PUT', body), schema: FeedbackRoutesAdminResponseSchema }),
   };
 }
 

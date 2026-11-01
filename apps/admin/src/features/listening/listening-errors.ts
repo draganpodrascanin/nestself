@@ -5,11 +5,12 @@
  * `null` means the user cancelled a step-up: nothing to show.
  */
 import { ApiError } from '@nestself/api-client';
-import { LISTENING_ERROR_CODES } from '@nestself/contracts';
+import { FEEDBACK_ERROR_CODES, LISTENING_ERROR_CODES } from '@nestself/contracts';
 import { StepUpCancelledError } from '../../auth';
 
 export type ListeningErrorKey =
   | (typeof LISTENING_ERROR_CODES)[number]
+  | (typeof FEEDBACK_ERROR_CODES)[number]
   | 'validation'
   | 'forbidden'
   | 'notFound'
@@ -33,7 +34,7 @@ export function listeningErrorKey(err: unknown): ListeningErrorKey | null {
   if (err instanceof StepUpCancelledError) return null;
   if (err instanceof ApiError) {
     if (err.status === 429) return 'rateLimited';
-    if ((LISTENING_ERROR_CODES as readonly string[]).includes(err.code)) return err.code as ListeningErrorKey;
+    if (([...LISTENING_ERROR_CODES, ...FEEDBACK_ERROR_CODES] as readonly string[]).includes(err.code)) return err.code as ListeningErrorKey;
     const mapped = BY_CODE[err.code];
     if (mapped) return mapped;
     if (err.status === 404) return 'notFound';

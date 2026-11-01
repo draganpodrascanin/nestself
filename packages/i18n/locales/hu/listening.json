@@ -261,7 +261,13 @@
     "contextMismatch": "A folytatáshoz váltson a szervezeti munkaterületre.",
     "rateLimited": "Túl sok próbálkozás. Várjon egy pillanatot, és próbálja újra.",
     "conflict": "Ez a művelet a jelenlegi állapotban nem lehetséges.",
-    "unknown": "Hiba történt. Próbálja újra."
+    "unknown": "Hiba történt. Próbálja újra.",
+    "route_unavailable": "Ez a csatorna most nem érhető el. Válasszon másik címzettet, vagy próbálja később.",
+    "feedback_disabled": "A visszajelzési csatorna nincs bekapcsolva ennél a szervezetnél.",
+    "handler_not_eligible": "Ez a személy nem aktív tag visszajelzés-kezelői jogosultsággal.",
+    "same_handler": "A kijelölt és a helyettes címzett két különböző személy kell legyen.",
+    "sensitive_not_enabled": "Az érzékeny bejelentés nincs bekapcsolva ennél a szervezetnél.",
+    "invalid_state": "Ez a módosítás az eset jelenlegi állapotában nem lehetséges."
   },
   "questionnaires": {
     "title": "Kérdőívek",
@@ -381,6 +387,196 @@
       "window": "A válaszadási időszak nem lehet hosszabb az ütemnél.",
       "dates": "Az „Eddig” az „Ettől” után kell legyen.",
       "dateTime": "Adjon meg dátumot és időt."
+    }
+  },
+  "feedback": {
+    "title": "Visszajelzés",
+    "lead": "Jelezzen problémát vagy javasoljon fejlesztést. A címzett egy esetálnevet lát, soha nem az Ön fiókját.",
+    "new": "Új bejelentés",
+    "empty": "Még nem jelentett be semmit.",
+    "emptyBody": "A bejelentés a kijelölt címzetthez vagy, ha úgy kívánja, a független helyetteshez kerül. Itt semmi nem kapcsolódik a felmérésekhez.",
+    "kind": {
+      "problem": "Probléma",
+      "suggestion": "Javaslat"
+    },
+    "state": {
+      "submitted": "Beküldve",
+      "in_review": "Áttekintés alatt",
+      "waiting_for_reporter": "Önre vár",
+      "action_in_progress": "Intézkedés folyamatban",
+      "resolved": "Megoldva",
+      "closed": "Lezárva"
+    },
+    "stateHandler": {
+      "submitted": "Beküldve",
+      "in_review": "Áttekintés alatt",
+      "waiting_for_reporter": "A bejelentőre vár",
+      "action_in_progress": "Intézkedés folyamatban",
+      "resolved": "Megoldva",
+      "closed": "Lezárva"
+    },
+    "function": {
+      "primary": "kijelölt címzett",
+      "alternate": "helyettes címzett"
+    },
+    "categories": {
+      "workload": "Munkaterhelés",
+      "management": "Vezetés",
+      "communication": "Kommunikáció",
+      "equipment": "Eszközök és felszerelés",
+      "safety": "Biztonság",
+      "other": "Egyéb"
+    },
+    "nextAction": {
+      "acknowledge": "Átvétel visszaigazolása",
+      "respond": "Válaszadás",
+      "await_reporter": "Várakozás a bejelentőre",
+      "complete_action": "Az intézkedés befejezése",
+      "review_reply": "A bejelentő válaszának áttekintése",
+      "acknowledge_escalation": "Az eszkalált eset átvétele"
+    },
+    "columns": {
+      "case": "Eset",
+      "kind": "Típus",
+      "category": "Kategória",
+      "state": "Állapot",
+      "created": "Létrehozva",
+      "lastMessage": "Utolsó üzenet",
+      "due": "Válaszadási cél",
+      "nextAction": "Következő lépés",
+      "route": "Címzett"
+    },
+    "composer": {
+      "title": "Probléma vagy javaslat bejelentése",
+      "lead": "Írja le, mi történt, vagy mi segítene. Ön dönt, ki kapja meg, és hogy a neve vele megy-e.",
+      "sampleNote": "Mintamód: amit itt ír, nem kerül elküldésre vagy mentésre.",
+      "kind": "Miről van szó?",
+      "route": "Csatorna",
+      "route_standard": "Problémák és javaslatok",
+      "route_sensitive": "Érzékeny ügyek",
+      "sensitiveNote": "Ezt a csatornát {{hours}} figyelik. Nem sürgősségi szolgálat.",
+      "hoursUnknown": "a címzettek munkaidejében",
+      "category": "Kategória",
+      "categoryPlaceholder": "Válasszon kategóriát",
+      "recipient": "Ki kapja meg?",
+      "primaryOption": "{{name}} (kijelölt címzett)",
+      "alternateOption": "{{name}} (helyettes címzett, ha az ügy a kijelöltet érinti)",
+      "preview": "A bejelentés {{name}} részére megy, aki a {{function}}.",
+      "previewAlternate": "{{other}} nem kapja meg, és nem tudja meg, hogy a helyettest választotta.",
+      "previewPrimary": "{{other}} a helyettes, ha a kijelölt címzett nem tudja átvenni.",
+      "anonymous": "Bejelentés a nevem nélkül",
+      "anonymousHint": "Az alapbeállítás. A címzett egy esetálnevet lát; a fiókját a munkáltató soha nem látja.",
+      "anonymousOff": "A neve a bejelentéssel együtt megy. Ezt visszakapcsolhatja.",
+      "identityWarning": "A szövegben szereplő részletek (nevek, dátumok, helyek, a szerepe) továbbra is felfedhetik, ki Ön. Csak azt ossza meg, amire a címzettnek szüksége van.",
+      "body": "Mi történt, vagy mi segítene?",
+      "bodyHint": "Legfeljebb 5000 karakter. A kísérleti szakaszban nincs csatolmány.",
+      "submit": "Bejelentés elküldése",
+      "sending": "Küldés",
+      "whoSees": "A kiválasztott címzett, és csak ő. Alapértelmezés szerint nem a vezetője, nem a NestSelf munkatársai, és soha nem a felmérési jelentések vagy exportok.",
+      "unavailable": "A visszajelzési csatorna nem érhető el",
+      "unavailableBody": "A szervezete nem kapcsolta be, vagy még nincsenek kijelölt címzettek. Kérdezze meg HR-kapcsolattartóját, melyik eljárás érvényes; a NestSelf nem továbbítja máshová a bejelentéseket.",
+      "receipt": {
+        "title": "A bejelentését megkaptuk",
+        "body": "Ez most a(z) {{pseudonym}} eset, a {{function}} kezeli. A válaszadási cél: {{date}}.",
+        "bodyNoDue": "Ez most a(z) {{pseudonym}} eset, a {{function}} kezeli.",
+        "note": "E-mailben értesítjük, ha válasz érkezik; az e-mail soha nem tartalmazza a tartalmat.",
+        "view": "Az eset megnyitása",
+        "another": "Újabb bejelentés"
+      },
+      "errors": {
+        "bodyRequired": "Írja le a problémát vagy javaslatot.",
+        "categoryRequired": "Válasszon kategóriát."
+      }
+    },
+    "case": {
+      "title": "{{pseudonym}} eset",
+      "handledBy": "a {{function}} kezeli",
+      "due": "Válaszadási cél: {{date}}",
+      "thread": "Beszélgetés",
+      "replyPlaceholder": "Írjon választ vagy kérjen pontosítást",
+      "send": "Küldés",
+      "sent": "Elküldve",
+      "failed": "A küldés nem sikerült. A szövege megmarad.",
+      "closed": "Ez az eset lezárult, és nem fogad válaszokat.",
+      "resolvedNote": "Ez az eset megoldva. A válasz újranyitja a címzettnél.",
+      "sampleNote": "Mintamód: a válaszok csak itt jelennek meg, nem kerülnek elküldésre.",
+      "back": "Vissza a visszajelzéseimhez"
+    },
+    "inbox": {
+      "title": "Visszajelzési postafiók",
+      "lead": "Az Önhöz rendelt esetek. Esetenként egy álnevet lát, soha nem a bejelentő fiókját.",
+      "empty": "Nincs Önhöz rendelt eset.",
+      "overdue": "Lejárt",
+      "escalated": "Eszkalálva",
+      "sampleNote": "Mintamód: ezek az esetek kitaláltak, és semmi nem kerül mentésre."
+    },
+    "handler": {
+      "title": "{{pseudonym}} eset",
+      "thread": "Beszélgetés",
+      "internalHint": "A belső jegyzetek elkülönülnek, és soha nem jelennek meg a bejelentőnek.",
+      "internalNote": "Belső jegyzet",
+      "reporter": "Bejelentő",
+      "handler": "Kezelő",
+      "system": "NestSelf",
+      "message": "Üzenet",
+      "messagePlaceholder": "Írjon a bejelentőnek, vagy belső jegyzetet az esethez",
+      "asInternal": "Belső jegyzet (a bejelentő nem látja)",
+      "sendVisible": "Küldés a bejelentőnek",
+      "sendInternal": "Belső jegyzet mentése",
+      "sent": "Üzenet elküldve.",
+      "noteSaved": "Belső jegyzet mentve.",
+      "changeState": "Állapot módosítása",
+      "newState": "Új állapot",
+      "statePlaceholder": "Válassza a következő állapotot",
+      "nextAction": "Következő lépés (nem kötelező)",
+      "explanation": "Magyarázat a bejelentőnek",
+      "explanationHint": "A megoldáshoz kötelező. A bejelentő üzenetként olvassa.",
+      "outcomeReason": "A kimenet indoka",
+      "outcomeReasonHint": "A lezáráshoz kötelező. A bejelentő nem látja.",
+      "apply": "Alkalmaz",
+      "stateChanged": "Az állapot módosult: {{state}}.",
+      "reassignLead": "Ez az eset átadható a {{function}} részére; értesítést kap és átveszi.",
+      "reassign": "Átadás a {{function}} részére",
+      "reassignTitle": "Átadja ezt az esetet?",
+      "reassignBody": "A {{function}} átveszi az esetet és értesítést kap. Ön elveszíti a hozzáférést.",
+      "reassignConfirm": "Átadás",
+      "reassigned": "Az eset átadva.",
+      "anonymous": "A bejelentő a munkáltató felé névtelen kívánt maradni.",
+      "closedNote": "Ez az eset lezárult.",
+      "back": "Vissza a postafiókba",
+      "errors": {
+        "bodyRequired": "Írjon üzenetet.",
+        "stateRequired": "Válassza a következő állapotot.",
+        "explanationRequired": "Írja meg a magyarázatot, amelyet a bejelentő olvasni fog.",
+        "outcomeRequired": "Rögzítse a kimenet indokát."
+      }
+    },
+    "recipients": {
+      "title": "Visszajelzési címzettek",
+      "lead": "Ki kapja a problémákat és javaslatokat. Egy csatornához kijelölt címzett és független helyettes kell, mindketten visszajelzés-kezelői jogosultsággal, mielőtt bekapcsolható.",
+      "channelOff": "A visszajelzési csatorna nincs bekapcsolva a szervezetnél. A címzettek előkészíthetők; a munkavállalók akkor látják a csatornát, amikor a NestSelf bekapcsolja.",
+      "standard": "Problémák és javaslatok",
+      "sensitive": "Érzékeny ügyek",
+      "sensitiveGate": "Az érzékeny bejelentést a NestSelf kapcsolja be, amikor létezik személyzettel ellátott eljárás: megnevezett címzettek, független helyettes, figyelt időszak és eszkalációs út. Soha nem tanúsított visszaélés-bejelentő csatornaként jelenik meg.",
+      "sensitiveLocked": "Nincs bekapcsolva a szervezetnél. Forduljon a NestSelfhez, amikor az eljárás készen áll.",
+      "primary": "Kijelölt címzett",
+      "alternate": "Helyettes címzett",
+      "pickMember": "Válasszon tagot",
+      "responseTarget": "Válaszadási cél (óra)",
+      "categories": "Kategóriák",
+      "categoriesHint": "Soronként egy, úgy, ahogy a munkavállalók látni fogják.",
+      "currentCategories": "Jelenlegi kategóriák: {{list}}",
+      "operatingHours": "Figyelt időszak",
+      "operatingHoursHint": "A munkavállalók az űrlapon látják, például „H-P 9-17”.",
+      "escalationNote": "Eszkalációs út",
+      "escalationNoteHint": "A szervezet valós eljárása, ha a csatorna nem érhető el.",
+      "enabled": "Csatorna bekapcsolva",
+      "eligibilityNote": "Mindkét címzettnek aktív tagnak kell lennie visszajelzés-kezelői jogosultsággal; a kiszolgáló különben elutasítja a mentést.",
+      "save": "Címzettek mentése",
+      "saved": "A címzettek mentve.",
+      "errors": {
+        "target": "Adjon meg egy egész óraszámot 1 és 720 között."
+      }
     }
   }
 }

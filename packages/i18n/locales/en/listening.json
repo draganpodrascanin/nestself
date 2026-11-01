@@ -261,7 +261,13 @@
     "contextMismatch": "Switch to the organization workspace to continue.",
     "rateLimited": "Too many attempts. Wait a moment and try again.",
     "conflict": "This action is not possible in the current state.",
-    "unknown": "Something went wrong. Try again."
+    "unknown": "Something went wrong. Try again.",
+    "route_unavailable": "This route is not available right now. Choose another recipient or try again later.",
+    "feedback_disabled": "The feedback channel is not enabled for this organization.",
+    "handler_not_eligible": "This person is not an active member with the feedback handler grant.",
+    "same_handler": "The designated and the alternative recipient must be different people.",
+    "sensitive_not_enabled": "Sensitive reporting is not enabled for this organization.",
+    "invalid_state": "This change is not possible in the case's current state."
   },
   "questionnaires": {
     "title": "Questionnaires",
@@ -381,6 +387,196 @@
       "window": "The response window cannot be longer than the cadence.",
       "dates": "Until must be after From.",
       "dateTime": "Enter a date and time."
+    }
+  },
+  "feedback": {
+    "title": "Feedback",
+    "lead": "Raise a problem or suggest an improvement. The recipient sees a case pseudonym, never your account.",
+    "new": "New report",
+    "empty": "You have not raised anything yet.",
+    "emptyBody": "A report goes to a designated recipient or, if you prefer, to the independent alternative. Nothing here is linked to surveys.",
+    "kind": {
+      "problem": "Problem",
+      "suggestion": "Suggestion"
+    },
+    "state": {
+      "submitted": "Submitted",
+      "in_review": "In review",
+      "waiting_for_reporter": "Waiting for you",
+      "action_in_progress": "Action in progress",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "stateHandler": {
+      "submitted": "Submitted",
+      "in_review": "In review",
+      "waiting_for_reporter": "Waiting for reporter",
+      "action_in_progress": "Action in progress",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "function": {
+      "primary": "designated recipient",
+      "alternate": "alternative recipient"
+    },
+    "categories": {
+      "workload": "Workload",
+      "management": "Management",
+      "communication": "Communication",
+      "equipment": "Equipment and tools",
+      "safety": "Safety",
+      "other": "Other"
+    },
+    "nextAction": {
+      "acknowledge": "Acknowledge",
+      "respond": "Respond",
+      "await_reporter": "Wait for the reporter",
+      "complete_action": "Complete the action",
+      "review_reply": "Review the reporter's reply",
+      "acknowledge_escalation": "Acknowledge the escalated case"
+    },
+    "columns": {
+      "case": "Case",
+      "kind": "Kind",
+      "category": "Category",
+      "state": "State",
+      "created": "Created",
+      "lastMessage": "Last message",
+      "due": "Response target",
+      "nextAction": "Next action",
+      "route": "Recipient"
+    },
+    "composer": {
+      "title": "Raise a problem or suggestion",
+      "lead": "Describe what happened or what would help. You choose who receives it and whether your name travels with it.",
+      "sampleNote": "Sample mode: nothing you write here is sent or saved.",
+      "kind": "What is it?",
+      "route": "Channel",
+      "route_standard": "Problems and suggestions",
+      "route_sensitive": "Sensitive matters",
+      "sensitiveNote": "This route is monitored {{hours}}. It is not an emergency service.",
+      "hoursUnknown": "during the recipients' working hours",
+      "category": "Category",
+      "categoryPlaceholder": "Choose a category",
+      "recipient": "Who should receive it?",
+      "primaryOption": "{{name}} (designated recipient)",
+      "alternateOption": "{{name}} (alternative recipient, if the matter concerns the designated one)",
+      "preview": "Your report goes to {{name}}, the {{function}}.",
+      "previewAlternate": "{{other}} will not receive it and will not be told you chose the alternative.",
+      "previewPrimary": "{{other}} is the alternative if the designated recipient cannot take it.",
+      "anonymous": "Report without my name",
+      "anonymousHint": "The default. The recipient sees a case pseudonym; your account is never shown to your employer.",
+      "anonymousOff": "Your name will travel with the report. You can switch this back on.",
+      "identityWarning": "Details in your text (names, dates, places, your role) can still reveal who you are. Share what the recipient needs and no more.",
+      "body": "What happened, or what would help?",
+      "bodyHint": "Up to 5000 characters. No files in the pilot.",
+      "submit": "Send report",
+      "sending": "Sending",
+      "whoSees": "The recipient you choose, and only them. Not your manager by default, not NestSelf staff, and never the survey reports or exports.",
+      "unavailable": "The feedback channel is not available",
+      "unavailableBody": "Your organization has not enabled it or has no designated recipients yet. Ask your HR contact which process applies; NestSelf does not route reports elsewhere.",
+      "receipt": {
+        "title": "Your report was received",
+        "body": "It is now case {{pseudonym}}, with the {{function}}. The response target is {{date}}.",
+        "bodyNoDue": "It is now case {{pseudonym}}, with the {{function}}.",
+        "note": "You will be notified by email when there is a reply; the email never contains the content.",
+        "view": "Open the case",
+        "another": "Raise another"
+      },
+      "errors": {
+        "bodyRequired": "Describe the problem or suggestion.",
+        "categoryRequired": "Choose a category."
+      }
+    },
+    "case": {
+      "title": "Case {{pseudonym}}",
+      "handledBy": "with the {{function}}",
+      "due": "Response target {{date}}",
+      "thread": "Conversation",
+      "replyPlaceholder": "Write a reply or ask for clarification",
+      "send": "Send",
+      "sent": "Sent",
+      "failed": "Could not send. Your text is kept.",
+      "closed": "This case is closed and accepts no replies.",
+      "resolvedNote": "This case is resolved. Replying reopens it for the recipient.",
+      "sampleNote": "Sample mode: replies are shown here only and not sent.",
+      "back": "Back to my feedback"
+    },
+    "inbox": {
+      "title": "Feedback inbox",
+      "lead": "Cases assigned to you. You see a pseudonym per case, never the reporter's account.",
+      "empty": "No cases are assigned to you.",
+      "overdue": "Overdue",
+      "escalated": "Escalated",
+      "sampleNote": "Sample mode: these cases are fictional and nothing you do here is saved."
+    },
+    "handler": {
+      "title": "Case {{pseudonym}}",
+      "thread": "Conversation",
+      "internalHint": "Internal notes are set apart and never shown to the reporter.",
+      "internalNote": "Internal note",
+      "reporter": "Reporter",
+      "handler": "Handler",
+      "system": "NestSelf",
+      "message": "Message",
+      "messagePlaceholder": "Write to the reporter, or an internal note for the case",
+      "asInternal": "Internal note (not visible to the reporter)",
+      "sendVisible": "Send to reporter",
+      "sendInternal": "Save internal note",
+      "sent": "Message sent.",
+      "noteSaved": "Internal note saved.",
+      "changeState": "Change state",
+      "newState": "New state",
+      "statePlaceholder": "Choose the next state",
+      "nextAction": "Next action (optional)",
+      "explanation": "Explanation for the reporter",
+      "explanationHint": "Required to resolve. The reporter reads it as a message.",
+      "outcomeReason": "Outcome reason",
+      "outcomeReasonHint": "Required to close. Not shown to the reporter.",
+      "apply": "Apply",
+      "stateChanged": "State changed to {{state}}.",
+      "reassignLead": "This case can be handed over to the {{function}}; they are notified and take it over.",
+      "reassign": "Hand over to the {{function}}",
+      "reassignTitle": "Hand this case over?",
+      "reassignBody": "The {{function}} takes over the case and is notified. You lose access to it.",
+      "reassignConfirm": "Hand over",
+      "reassigned": "The case was handed over.",
+      "anonymous": "The reporter chose to stay anonymous towards the employer.",
+      "closedNote": "This case is closed.",
+      "back": "Back to the inbox",
+      "errors": {
+        "bodyRequired": "Write a message.",
+        "stateRequired": "Choose the next state.",
+        "explanationRequired": "Write the explanation the reporter will read.",
+        "outcomeRequired": "Record the outcome reason."
+      }
+    },
+    "recipients": {
+      "title": "Feedback recipients",
+      "lead": "Who receives problems and suggestions. A route needs a designated recipient and an independent alternative, both holding the feedback handler grant, before it is enabled.",
+      "channelOff": "The feedback channel is not enabled for your organization. Recipients can be prepared; employees see the channel once NestSelf enables it.",
+      "standard": "Problems and suggestions",
+      "sensitive": "Sensitive matters",
+      "sensitiveGate": "Sensitive reporting is enabled by NestSelf once a staffed process exists: named recipients, an independent alternative, monitored hours and an escalation route. It is never presented as a certified whistleblowing channel.",
+      "sensitiveLocked": "Not enabled for your organization. Ask NestSelf once the process is in place.",
+      "primary": "Designated recipient",
+      "alternate": "Alternative recipient",
+      "pickMember": "Choose a member",
+      "responseTarget": "Response target (hours)",
+      "categories": "Categories",
+      "categoriesHint": "One per line, as employees will see them.",
+      "currentCategories": "Current categories: {{list}}",
+      "operatingHours": "Monitored hours",
+      "operatingHoursHint": "Shown to employees in the composer, for example \"Mon-Fri 9-17\".",
+      "escalationNote": "Escalation route",
+      "escalationNoteHint": "Your organization's actual process when the route is unavailable.",
+      "enabled": "Channel enabled",
+      "eligibilityNote": "Both recipients must be active members holding the feedback handler grant; the server refuses the save otherwise.",
+      "save": "Save recipients",
+      "saved": "Recipients saved.",
+      "errors": {
+        "target": "Enter a whole number of hours between 1 and 720."
+      }
     }
   }
 }

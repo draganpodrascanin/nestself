@@ -25,6 +25,8 @@ import {
   Presentation,
   ChartLineUp,
   ClipboardText,
+  ChatCenteredText,
+  Tray,
 } from '@phosphor-icons/react';
 import { AppShell, NavItem, Sheet, SheetTrigger, SheetContent } from '@nestself/ui';
 import { can } from '@nestself/contracts';
@@ -182,6 +184,11 @@ function AuthenticatedLayout() {
   const cyclesNav: NavEntry[] = showCycles
     ? [{ to: '/listening/surveys', icon: ClipboardText, label: t('listening:cycles.title') }]
     : [];
+  // Employee feedback channel (spec Epic F): the composer and own cases for employees, the inbox for handlers.
+  const showFeedback = principal ? can(principal, 'feedback_case.create.self', undefined, effectiveActions) : false;
+  const feedbackNav: NavEntry[] = showFeedback ? [{ to: '/feedback', icon: ChatCenteredText, label: t('listening:nav.feedback') }] : [];
+  const showFeedbackInbox = principal ? can(principal, 'feedback_case.handle', undefined, effectiveActions) : false;
+  const feedbackInboxNav: NavEntry[] = showFeedbackInbox ? [{ to: '/feedback/inbox', icon: Tray, label: t('listening:nav.feedbackInbox') }] : [];
 
   const allNavItems = [
     ...coreNavItems,
@@ -194,6 +201,8 @@ function AuthenticatedLayout() {
     ...approvalsNav,
     ...listeningNav,
     ...cyclesNav,
+    ...feedbackNav,
+    ...feedbackInboxNav,
     ...hrNav,
     ...peopleNav,
     ...orgUnitsNav,

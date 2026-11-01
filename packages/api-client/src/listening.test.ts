@@ -71,4 +71,37 @@ describe('createListeningApi', () => {
     expect(calls[1]!.url).toBe('https://api.test/api/ops/orgs/org_1/listening/configuration');
     expect(calls[1]!.init.method).toBe('PUT');
   });
+  it('creates a feedback case with the Idempotency-Key and targets the case, inbox and route paths', async () => {
+    responder = () => ({ status: 201, body: { id: 'fc1', pseudonym: 'Reporter-AB2C', state: 'submitted', dueAt: null, handlerFunction: 'alternate' } });
+    const created = await api().createFeedbackCase({ routeId: 'r1', kind: 'problem', category: 'workload', routeChoice: 'alternate', anonymousToEmployer: true, body: 'x' }, 'key-9');
+    expect(created.handlerFunction).toBe('alternate');
+    expect(calls[0]!.url).toBe('https://api.test/api/me/feedback/cases');
+    expect(new Headers(calls[0]!.init.headers).get('Idempotency-Key')).toBe('key-9');
+
+    responder = () => ({ status: 200, body: { items: [] } });
+    await api().feedbackInbox();
+    expect(calls[1]!.url).toBe('https://api.test/api/feedback/inbox');
+    await api().myFeedbackCases();
+    expect(calls[2]!.url).toBe('https://api.test/api/me/feedback/cases');
+
+    responder = () => ({ status: 200, body: { feedbackEnabled: true, sensitiveAllowed: false, items: [] } });
+    await api().orgFeedbackRoutes('org_1');
+    expect(calls[3]!.url).toBe('https://api.test/api/orgs/org_1/feedback/routes');
+
+    const handlerCase = {
+      id: 'fc1', orgId: 'org_1', kind: 'problem', category: 'workload', state: 'in_review', pseudonym: 'Reporter-AB2C', anonymousToEmployer: true,
+      routeKind: 'standard', routeChoice: 'alternate', handlerUserId: 'u2', nextAction: 'respond', dueAt: null, escalatedAt: null, resolvedAt: null,
+      closedAt: null, outcomeReason: null, createdAt: '2026-11-02T09:00:00.000Z', messages: [],
+    };
+    responder = () => ({ status: 200, body: handlerCase });
+    const changed = await api().setCaseState('fc1', { state: 'in_review' });
+    expect(changed.state).toBe('in_review');
+    expect(calls[4]!.url).toBe('https://api.test/api/feedback/cases/fc1/state');
+    expect(calls[4]!.init.method).toBe('POST');
+    await api().reassignCase('fc1', { to: 'primary' });
+    expect(calls[5]!.url).toBe('https://api.test/api/feedback/cases/fc1/reassign');
+
+    responder = () => ({ status: 200, body: { ...handlerCase, reporterUserId: 'leak' } });
+    await expect(api().handlerCase('fc1')).rejects.toBeInstanceOf(ApiError);
+  });
 });

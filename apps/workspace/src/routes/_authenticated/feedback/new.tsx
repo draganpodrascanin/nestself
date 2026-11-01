@@ -1,18 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
-import { Heading, StatusBlock } from '@nestself/ui';
+import { isSampleDataMode } from '../../../data-source';
+import { FeedbackComposerScreen } from '../../../features/feedback/feedback-composer-screen';
+import { listeningApi } from '../../../features/listening/listening-api';
 
-/** The feedback composer; arrives with the feedback-cases task. Opening it creates nothing. */
+/** The feedback composer (spec FBK-01). Opening it creates nothing; one send creates one case. */
 export const Route = createFileRoute('/_authenticated/feedback/new')({
-  component: FeedbackComposerPlaceholder,
+  component: () => <FeedbackComposerScreen listeningApi={listeningApi} sampleMode={isSampleDataMode} />,
 });
-
-function FeedbackComposerPlaceholder() {
-  const { t } = useTranslation(['listening', 'library']);
-  return (
-    <div className="space-y-6">
-      <Heading level={1}>{t('listening:nav.feedback')}</Heading>
-      <StatusBlock state="empty" title={t('library:requests.comingSoon.title')} body={t('library:requests.comingSoon.body')} />
-    </div>
-  );
-}

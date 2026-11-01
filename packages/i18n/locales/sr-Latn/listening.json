@@ -261,7 +261,13 @@
     "contextMismatch": "Pređite u radni prostor organizacije da biste nastavili.",
     "rateLimited": "Previše pokušaja. Sačekajte trenutak i pokušajte ponovo.",
     "conflict": "Ova radnja nije moguća u trenutnom stanju.",
-    "unknown": "Nešto nije u redu. Pokušajte ponovo."
+    "unknown": "Nešto nije u redu. Pokušajte ponovo.",
+    "route_unavailable": "Ovaj kanal trenutno nije dostupan. Izaberite drugog primaoca ili pokušajte kasnije.",
+    "feedback_disabled": "Kanal za povratne informacije nije uključen za ovu organizaciju.",
+    "handler_not_eligible": "Ova osoba nije aktivan član sa ovlašćenjem obrađivača povratnih informacija.",
+    "same_handler": "Određeni i alternativni primalac moraju biti različite osobe.",
+    "sensitive_not_enabled": "Osetljivo prijavljivanje nije uključeno za ovu organizaciju.",
+    "invalid_state": "Ova promena nije moguća u trenutnom statusu slučaja."
   },
   "questionnaires": {
     "title": "Upitnici",
@@ -381,6 +387,196 @@
       "window": "Period za odgovore ne može biti duži od ritma.",
       "dates": "„Do“ mora biti posle „Od“.",
       "dateTime": "Unesite datum i vreme."
+    }
+  },
+  "feedback": {
+    "title": "Povratne informacije",
+    "lead": "Prijavite problem ili predložite poboljšanje. Primalac vidi pseudonim slučaja, nikada vaš nalog.",
+    "new": "Nova prijava",
+    "empty": "Još ništa niste prijavili.",
+    "emptyBody": "Prijava ide određenom primaocu ili, ako želite, nezavisnoj alternativi. Ništa ovde nije povezano sa anketama.",
+    "kind": {
+      "problem": "Problem",
+      "suggestion": "Predlog"
+    },
+    "state": {
+      "submitted": "Poslato",
+      "in_review": "U razmatranju",
+      "waiting_for_reporter": "Čeka se vaš odgovor",
+      "action_in_progress": "Radnja u toku",
+      "resolved": "Rešeno",
+      "closed": "Zatvoreno"
+    },
+    "stateHandler": {
+      "submitted": "Poslato",
+      "in_review": "U razmatranju",
+      "waiting_for_reporter": "Čeka se podnosilac",
+      "action_in_progress": "Radnja u toku",
+      "resolved": "Rešeno",
+      "closed": "Zatvoreno"
+    },
+    "function": {
+      "primary": "određeni primalac",
+      "alternate": "alternativni primalac"
+    },
+    "categories": {
+      "workload": "Opterećenje",
+      "management": "Rukovođenje",
+      "communication": "Komunikacija",
+      "equipment": "Oprema i alati",
+      "safety": "Bezbednost",
+      "other": "Ostalo"
+    },
+    "nextAction": {
+      "acknowledge": "Potvrditi prijem",
+      "respond": "Odgovoriti",
+      "await_reporter": "Sačekati podnosioca",
+      "complete_action": "Završiti radnju",
+      "review_reply": "Pregledati odgovor podnosioca",
+      "acknowledge_escalation": "Potvrditi prijem eskaliranog slučaja"
+    },
+    "columns": {
+      "case": "Slučaj",
+      "kind": "Vrsta",
+      "category": "Kategorija",
+      "state": "Status",
+      "created": "Napravljeno",
+      "lastMessage": "Poslednja poruka",
+      "due": "Ciljni rok",
+      "nextAction": "Sledeća radnja",
+      "route": "Primalac"
+    },
+    "composer": {
+      "title": "Prijavite problem ili predlog",
+      "lead": "Opišite šta se dogodilo ili šta bi pomoglo. Vi birate ko to prima i da li vaše ime ide uz prijavu.",
+      "sampleNote": "Probni režim: ništa što ovde napišete ne šalje se i ne čuva.",
+      "kind": "O čemu je reč?",
+      "route": "Kanal",
+      "route_standard": "Problemi i predlozi",
+      "route_sensitive": "Osetljive teme",
+      "sensitiveNote": "Ovaj kanal se prati {{hours}}. Nije služba za hitne slučajeve.",
+      "hoursUnknown": "u radno vreme primalaca",
+      "category": "Kategorija",
+      "categoryPlaceholder": "Izaberite kategoriju",
+      "recipient": "Ko treba da primi prijavu?",
+      "primaryOption": "{{name}} (određeni primalac)",
+      "alternateOption": "{{name}} (alternativni primalac, ako se tema odnosi na određenog)",
+      "preview": "Vaša prijava ide osobi {{name}}, {{function}}.",
+      "previewAlternate": "{{other}} je neće primiti i neće saznati da ste izabrali alternativu.",
+      "previewPrimary": "{{other}} je alternativa ako određeni primalac ne može da je preuzme.",
+      "anonymous": "Prijavi bez mog imena",
+      "anonymousHint": "Podrazumevano. Primalac vidi pseudonim slučaja; vaš nalog se nikada ne prikazuje poslodavcu.",
+      "anonymousOff": "Vaše ime će ići uz prijavu. Ovo možete ponovo uključiti.",
+      "identityWarning": "Detalji u tekstu (imena, datumi, mesta, vaša uloga) i dalje mogu otkriti ko ste. Podelite samo ono što je primaocu potrebno.",
+      "body": "Šta se dogodilo ili šta bi pomoglo?",
+      "bodyHint": "Do 5000 znakova. U pilotu nema priloga.",
+      "submit": "Pošalji prijavu",
+      "sending": "Slanje",
+      "whoSees": "Primalac koga izaberete, i samo on. Ne vaš rukovodilac podrazumevano, ne osoblje NestSelf-a, i nikada izveštaji ili izvozi anketa.",
+      "unavailable": "Kanal za povratne informacije nije dostupan",
+      "unavailableBody": "Vaša organizacija ga nije uključila ili još nema određene primaoce. Pitajte kontakt u HR-u koji postupak važi; NestSelf ne prosleđuje prijave drugde.",
+      "receipt": {
+        "title": "Vaša prijava je primljena",
+        "body": "Sada je slučaj {{pseudonym}}, kod {{function}}. Ciljni rok za odgovor je {{date}}.",
+        "bodyNoDue": "Sada je slučaj {{pseudonym}}, kod {{function}}.",
+        "note": "Dobićete poruku e-poštom kada stigne odgovor; poruka nikada ne sadrži sadržaj.",
+        "view": "Otvorite slučaj",
+        "another": "Prijavite još nešto"
+      },
+      "errors": {
+        "bodyRequired": "Opišite problem ili predlog.",
+        "categoryRequired": "Izaberite kategoriju."
+      }
+    },
+    "case": {
+      "title": "Slučaj {{pseudonym}}",
+      "handledBy": "kod {{function}}",
+      "due": "Ciljni rok {{date}}",
+      "thread": "Razgovor",
+      "replyPlaceholder": "Napišite odgovor ili zatražite objašnjenje",
+      "send": "Pošalji",
+      "sent": "Poslato",
+      "failed": "Slanje nije uspelo. Vaš tekst je sačuvan.",
+      "closed": "Ovaj slučaj je zatvoren i ne prima odgovore.",
+      "resolvedNote": "Ovaj slučaj je rešen. Odgovor ga ponovo otvara kod primaoca.",
+      "sampleNote": "Probni režim: odgovori se prikazuju samo ovde i ne šalju se.",
+      "back": "Nazad na moje povratne informacije"
+    },
+    "inbox": {
+      "title": "Sanduče povratnih informacija",
+      "lead": "Slučajevi dodeljeni vama. Vidite pseudonim po slučaju, nikada nalog podnosioca.",
+      "empty": "Nema slučajeva dodeljenih vama.",
+      "overdue": "Prekoračen rok",
+      "escalated": "Eskalirano",
+      "sampleNote": "Probni režim: ovi slučajevi su izmišljeni i ništa što uradite ovde se ne čuva."
+    },
+    "handler": {
+      "title": "Slučaj {{pseudonym}}",
+      "thread": "Razgovor",
+      "internalHint": "Interne beleške su odvojene i nikada se ne prikazuju podnosiocu.",
+      "internalNote": "Interna beleška",
+      "reporter": "Podnosilac",
+      "handler": "Obrađivač",
+      "system": "NestSelf",
+      "message": "Poruka",
+      "messagePlaceholder": "Pišite podnosiocu ili ostavite internu belešku za slučaj",
+      "asInternal": "Interna beleška (nije vidljiva podnosiocu)",
+      "sendVisible": "Pošalji podnosiocu",
+      "sendInternal": "Sačuvaj internu belešku",
+      "sent": "Poruka je poslata.",
+      "noteSaved": "Interna beleška je sačuvana.",
+      "changeState": "Promena statusa",
+      "newState": "Novi status",
+      "statePlaceholder": "Izaberite sledeći status",
+      "nextAction": "Sledeća radnja (opciono)",
+      "explanation": "Objašnjenje za podnosioca",
+      "explanationHint": "Obavezno za rešavanje. Podnosilac ga čita kao poruku.",
+      "outcomeReason": "Razlog ishoda",
+      "outcomeReasonHint": "Obavezno za zatvaranje. Ne prikazuje se podnosiocu.",
+      "apply": "Primeni",
+      "stateChanged": "Status promenjen u {{state}}.",
+      "reassignLead": "Ovaj slučaj može da se preda {{function}}; ta osoba dobija obaveštenje i preuzima ga.",
+      "reassign": "Predaj {{function}}",
+      "reassignTitle": "Predati ovaj slučaj?",
+      "reassignBody": "{{function}} preuzima slučaj i dobija obaveštenje. Vi gubite pristup slučaju.",
+      "reassignConfirm": "Predaj",
+      "reassigned": "Slučaj je predat.",
+      "anonymous": "Podnosilac je izabrao da ostane anoniman prema poslodavcu.",
+      "closedNote": "Ovaj slučaj je zatvoren.",
+      "back": "Nazad u sanduče",
+      "errors": {
+        "bodyRequired": "Napišite poruku.",
+        "stateRequired": "Izaberite sledeći status.",
+        "explanationRequired": "Napišite objašnjenje koje će podnosilac pročitati.",
+        "outcomeRequired": "Zabeležite razlog ishoda."
+      }
+    },
+    "recipients": {
+      "title": "Primaoci povratnih informacija",
+      "lead": "Ko prima probleme i predloge. Kanal zahteva određenog primaoca i nezavisnu alternativu, oboje sa ovlašćenjem obrađivača povratnih informacija, pre nego što se uključi.",
+      "channelOff": "Kanal za povratne informacije nije uključen za vašu organizaciju. Primaoci se mogu pripremiti; zaposleni vide kanal kada ga NestSelf uključi.",
+      "standard": "Problemi i predlozi",
+      "sensitive": "Osetljive teme",
+      "sensitiveGate": "Osetljivo prijavljivanje uključuje NestSelf kada postoji postupak sa osobljem: imenovani primaoci, nezavisna alternativa, vreme praćenja i put eskalacije. Nikada se ne predstavlja kao sertifikovani kanal za uzbunjivanje.",
+      "sensitiveLocked": "Nije uključeno za vašu organizaciju. Obratite se NestSelf-u kada postupak bude uspostavljen.",
+      "primary": "Određeni primalac",
+      "alternate": "Alternativni primalac",
+      "pickMember": "Izaberite člana",
+      "responseTarget": "Ciljni rok za odgovor (sati)",
+      "categories": "Kategorije",
+      "categoriesHint": "Jedna po redu, onako kako će ih zaposleni videti.",
+      "currentCategories": "Trenutne kategorije: {{list}}",
+      "operatingHours": "Vreme praćenja",
+      "operatingHoursHint": "Prikazuje se zaposlenima u obrascu, na primer „pon-pet 9-17“.",
+      "escalationNote": "Put eskalacije",
+      "escalationNoteHint": "Stvarni postupak vaše organizacije kada kanal nije dostupan.",
+      "enabled": "Kanal uključen",
+      "eligibilityNote": "Oba primaoca moraju biti aktivni članovi sa ovlašćenjem obrađivača povratnih informacija; server inače odbija čuvanje.",
+      "save": "Sačuvaj primaoce",
+      "saved": "Primaoci su sačuvani.",
+      "errors": {
+        "target": "Unesite ceo broj sati između 1 i 720."
+      }
     }
   }
 }
