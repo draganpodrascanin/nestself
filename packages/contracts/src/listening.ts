@@ -207,6 +207,11 @@ export const SurveyDraftRequestSchema = z.strictObject({
 });
 export type SurveyDraftRequest = z.infer<typeof SurveyDraftRequestSchema>;
 
+export const SurveyDraftResponseSchema = z.strictObject({
+  savedAt: isoDateTime,
+});
+export type SurveyDraftResponse = z.infer<typeof SurveyDraftResponseSchema>;
+
 export const SurveySubmitRequestSchema = z.strictObject({
   answers: SurveyAnswersSchema.refine((a) => Object.keys(a).length >= 1, {
     message: 'At least one rating is required',

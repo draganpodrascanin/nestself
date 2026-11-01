@@ -22,6 +22,8 @@ import * as opsCertificateAlert from './ops-certificate-alert.js';
 import { type MailEnvelope, type RenderedMail } from './shared.js';
 import * as ssoBindCode from './sso-bind-code.js';
 import * as stepUpCode from './step-up-code.js';
+import * as surveyInvitation from './survey-invitation.js';
+import * as surveyReminder from './survey-reminder.js';
 import * as webinarCanceled from './webinar-canceled.js';
 import * as webinarRecordedNotice from './webinar-recorded-notice.js';
 import * as webinarRegistration from './webinar-registration.js';
@@ -45,6 +47,9 @@ export const mailTemplates = {
   step_up_code: stepUpCode,
   sso_bind_code: ssoBindCode,
   ops_certificate_alert: opsCertificateAlert,
+  // Employee listening (ADR 0002, spec EMP-03): the launch invitation and the reminder.
+  survey_invitation: surveyInvitation,
+  survey_reminder: surveyReminder,
 } as const;
 
 export type MailTemplateName = keyof typeof mailTemplates;

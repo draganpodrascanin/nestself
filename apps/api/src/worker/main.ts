@@ -11,6 +11,8 @@
  * - the webinar job scheduler (`nestself-webinars`: `webinar.remind`,
  *   `webinar.recording.start`, `webinar.recording.finalize`, T-CW-2.1,
  *   T-CW-2.3) with `WebinarJobsService` as its handler;
+ * - the listening job scheduler (`nestself-listening`: `listening.tick`,
+ *   `listening.remind`, ADR 0002) with `ListeningJobsService` as its handler;
  * - `chime.events.consume` (`ChimeEventsConsumer`): the chime-events SQS
  *   queue with `VIDEO_PROVIDER=chime`, otherwise the fake provider's
  *   in-process events (D-CW-12, CW-R-41).
@@ -30,6 +32,8 @@ import { JobSchedulerService } from '../jobs/job-scheduler.service.js';
 import { MediaJobProcessor } from '../media/media-job.processor.js';
 import { WebinarJobSchedulerService } from '../jobs/webinar-job-scheduler.service.js';
 import { WebinarJobsService } from '../webinars/webinar-jobs.service.js';
+import { ListeningJobSchedulerService } from '../listening/listening-job-scheduler.service.js';
+import { ListeningJobsService } from '../listening/listening-jobs.service.js';
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule, { bufferLogs: true });
@@ -53,6 +57,8 @@ async function bootstrap() {
 
   await app.get(CallsJobSchedulerService).start(app.get(CallsJobsService));
   await app.get(WebinarJobSchedulerService).start(app.get(WebinarJobsService));
+  // Employee listening (ADR 0002): cycle launches, finalization and reminders.
+  await app.get(ListeningJobSchedulerService).start(app.get(ListeningJobsService));
   const events = app.get(ChimeEventsConsumer).start();
   logger.log(`Worker running (chime events: ${events})`);
 

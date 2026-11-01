@@ -102,6 +102,18 @@ const samples: { [T in MailTemplateName]: MailTemplateData<T> } = {
     daysLeft: '5',
     adminUrl: 'https://admin.nestself.rs/sso',
   },
+  survey_invitation: {
+    organizationName: 'Example d.o.o.',
+    closesAt: '2026-11-08T07:00:00.000Z',
+    timeZone: 'Europe/Belgrade',
+    surveyUrl: 'https://app.nestself.rs/survey',
+  },
+  survey_reminder: {
+    organizationName: 'Example d.o.o.',
+    closesAt: '2026-11-08T07:00:00.000Z',
+    timeZone: 'Europe/Belgrade',
+    surveyUrl: 'https://app.nestself.rs/survey',
+  },
 };
 
 /** The sender the tests render with: ORGANIZER of every calendar file. */
@@ -138,6 +150,8 @@ describe('mail templates', () => {
         'ops_certificate_alert',
         'sso_bind_code',
         'step_up_code',
+        'survey_invitation',
+        'survey_reminder',
         'webinar.canceled',
         'webinar.recorded_notice',
         'webinar.registration',
