@@ -88,3 +88,18 @@ export const intakeKeys = {
 export const reportingKeys = {
   all: (ctx: ActiveContext) => [...contextKey(ctx), 'reporting'] as const,
 };
+
+/** Employee listening (ADR 0002): the employee's survey, the organization's reports and cycles, the operations views. */
+export const listeningKeys = {
+  all: (ctx: ActiveContext) => [...contextKey(ctx), 'listening'] as const,
+  mySurvey: (ctx: ActiveContext) => [...contextKey(ctx), 'listening', 'my-survey'] as const,
+  overview: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', orgId, 'overview'] as const,
+  heatmap: (ctx: ActiveContext, orgId: string, snapshotId: string | null) =>
+    [...contextKey(ctx), 'listening', orgId, 'heatmap', snapshotId ?? 'latest'] as const,
+  dimension: (ctx: ActiveContext, orgId: string, key: string, snapshotId: string | null) =>
+    [...contextKey(ctx), 'listening', orgId, 'dimension', key, snapshotId ?? 'latest'] as const,
+  cycles: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', orgId, 'cycles'] as const,
+  configuration: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', orgId, 'configuration'] as const,
+  opsConfiguration: (ctx: ActiveContext, orgId: string) => [...contextKey(ctx), 'listening', 'ops', orgId, 'configuration'] as const,
+  questionnaires: (ctx: ActiveContext) => [...contextKey(ctx), 'listening', 'ops', 'questionnaires'] as const,
+};

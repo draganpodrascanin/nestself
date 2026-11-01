@@ -13,6 +13,7 @@ export const namespaces = [
   'library',
   'cms',
   'calls',
+  'listening',
 ] as const;
 export type Namespace = (typeof namespaces)[number];
 

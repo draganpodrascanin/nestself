@@ -274,6 +274,7 @@ export * from './webinars.ts';
 // ---------------------------------------------------------------------------
 
 export * from './listening.ts';
+export { PILOT_QUESTIONNAIRE_DIMENSIONS, PILOT_PRIVACY_NOTICE } from './listening-pilot.ts';
 
 export {
   LISTENING_DIMENSION_KEYS,

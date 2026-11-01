@@ -44,7 +44,10 @@ export {
   pollKeys,
   intakeKeys,
   reportingKeys,
+  listeningKeys,
 } from './query-keys';
+export { createListeningApi } from './listening';
+export type { ListeningApi } from './listening';
 export {
   APPROVAL_OUTCOMES,
   AppointmentExpertOptionsSchema,
